@@ -193,6 +193,154 @@ function calcularPorTipo(averias) {
   });
 }
 
+// Milisegundos entre dos fechas ISO, o null si falta alguna
+// o si el resultado no tiene sentido (negativo).
+function diferencia(inicio, fin) {
+  if (!inicio || !fin) {
+    return null;
+  }
+
+  const milisegundos = new Date(fin) - new Date(inicio);
+
+  return Number.isFinite(milisegundos) && milisegundos >= 0
+    ? milisegundos
+    : null;
+}
+
+function promedio(valores) {
+  const validos = valores.filter(valor => valor !== null);
+
+  return validos.length
+    ? validos.reduce((suma, valor) => suma + valor, 0) / validos.length
+    : null;
+}
+
+// Fecha en que el técnico actual recibió la avería. Si fue reasignada,
+// es la última asignación a ese técnico, no la primera de la avería.
+function fechaAsignacionTecnico(averia) {
+  const asignaciones = averia.historialAsignaciones || [];
+
+  const ultima = [...asignaciones]
+    .reverse()
+    .find(asignacion => asignacion.tecnicoId === averia.tecnicoId);
+
+  return ultima?.fecha || averia.fechaAsignacion;
+}
+
+// Tiempos de una avería en milisegundos (null si todavía no aplica):
+// - asignacion: desde el registro hasta la primera asignación (administrador).
+// - respuesta: desde la asignación hasta el inicio de la atención (técnico).
+// - duracion: desde el inicio de la atención hasta la resolución.
+function calcularTiempos(averia) {
+  const resuelta = ["Resuelto", "Cerrado"].includes(averia.estado);
+
+  return {
+    asignacion: diferencia(averia.fechaCreacion, averia.fechaAsignacion),
+    respuesta: diferencia(
+      fechaAsignacionTecnico(averia),
+      averia.fechaInicioAtencion
+    ),
+    duracion: resuelta
+      ? diferencia(averia.fechaInicioAtencion, averia.fechaResolucion)
+      : null
+  };
+}
+
+function calcularTiemposPromedio(averias) {
+  const tiempos = averias.map(calcularTiempos);
+
+  return {
+    asignacion: promedio(tiempos.map(tiempo => tiempo.asignacion)),
+    respuesta: promedio(tiempos.map(tiempo => tiempo.respuesta)),
+    duracion: promedio(tiempos.map(tiempo => tiempo.duracion))
+  };
+}
+
+// Técnicos registrados, más los que aparecen en averías antiguas
+// aunque ya no estén en la lista.
+function tecnicosEnDatos(averias) {
+  const tecnicos = new Map(
+    RepositorioTecnicos
+      .obtenerTodos()
+      .map(tecnico => [tecnico.id, tecnico.nombre])
+  );
+
+  averias.forEach(averia => {
+    if (averia.tecnicoId && !tecnicos.has(averia.tecnicoId)) {
+      tecnicos.set(
+        averia.tecnicoId,
+        averia.tecnicoNombre || averia.tecnicoId
+      );
+    }
+  });
+
+  return [...tecnicos]
+    .map(([id, nombre]) => ({ id, nombre }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+function calcularPorTecnico(averias) {
+  return tecnicosEnDatos(averias).map(({ id, nombre }) => {
+    const asignadas = averias.filter(
+      averia => averia.tecnicoId === id
+    );
+
+    const tiempos = calcularTiemposPromedio(asignadas);
+
+    return {
+      tecnicoId: id,
+      nombre,
+      asignadas: asignadas.length,
+      enAtencion: contarPorEstado(asignadas, ...ESTADOS_ACTIVOS),
+      resueltas: contarPorEstado(asignadas, "Resuelto", "Cerrado"),
+      rechazadas: contarPorEstado(asignadas, "Rechazado"),
+      respuesta: tiempos.respuesta,
+      duracion: tiempos.duracion
+    };
+  });
+}
+
+function textoDuracion(milisegundos) {
+  if (milisegundos === null) {
+    return "Sin datos";
+  }
+
+  const minutos = Math.round(milisegundos / 60000);
+
+  if (minutos < 60) {
+    return `${minutos} min`;
+  }
+
+  const horas = Math.floor(minutos / 60);
+  const minutosRestantes = minutos % 60;
+
+  if (horas < 24) {
+    return minutosRestantes
+      ? `${horas} h ${minutosRestantes} min`
+      : `${horas} h`;
+  }
+
+  const dias = Math.floor(horas / 24);
+  const horasRestantes = horas % 24;
+
+  return horasRestantes
+    ? `${dias} d ${horasRestantes} h`
+    : `${dias} d`;
+}
+
+// Unidad del eje según el mayor tiempo, para que los valores sean legibles.
+function elegirUnidadTiempo(maximo) {
+  if (maximo < 2 * 3600000) {
+    return { nombre: "Minutos", milisegundos: 60000 };
+  }
+
+  if (maximo < 2 * 86400000) {
+    return { nombre: "Horas", milisegundos: 3600000 };
+  }
+
+  return { nombre: "Días", milisegundos: 86400000 };
+}
+
 function calcularPorDepartamento(averias) {
   return valoresPresentes(DEPARTAMENTOS, averias, "departamento").map(departamento => {
     const delDepartamento = averias.filter(
@@ -235,6 +383,7 @@ async function mostrarEstadisticas() {
     ".";
 
   mostrarIndicadoresPeriodo(averias);
+  mostrarIndicadoresTiempos(averias);
 
   // Las tablas no dependen de Google Charts.
   mostrarTablasEstadisticas(averias);
@@ -275,7 +424,31 @@ function mostrarIndicadoresPeriodo(averias) {
     }
   ];
 
-  const contenedor = $("indicadoresPeriodo");
+  pintarIndicadores("indicadoresPeriodo", indicadores);
+}
+
+function mostrarIndicadoresTiempos(averias) {
+  const tiempos = calcularTiemposPromedio(averias);
+
+  pintarIndicadores("indicadoresTiempos", [
+    {
+      titulo: "Asignación promedio (registro → asignación)",
+      valor: textoDuracion(tiempos.asignacion)
+    },
+    {
+      titulo: "Respuesta promedio del técnico (asignación → inicio)",
+      valor: textoDuracion(tiempos.respuesta)
+    },
+    {
+      titulo: "Duración promedio de la atención (inicio → resolución)",
+      valor: textoDuracion(tiempos.duracion)
+    }
+  ]);
+}
+
+// indicadores: [{ titulo, valor, clase? }, ...]
+function pintarIndicadores(contenedorId, indicadores) {
+  const contenedor = $(contenedorId);
   contenedor.replaceChildren();
 
   indicadores.forEach(indicador => {
@@ -361,6 +534,40 @@ function mostrarTablasEstadisticas(averias) {
       averias.length ? "100%" : "0%"
     ]
   );
+
+  const asignadas = averias.filter(averia => averia.tecnicoId);
+  const tiemposGenerales = calcularTiemposPromedio(asignadas);
+
+  mostrarTabla(
+    "tablaTecnicos",
+    [
+      "Técnico",
+      "Asignadas",
+      "En atención",
+      "Resueltas",
+      "Rechazadas",
+      "Respuesta promedio",
+      "Duración promedio"
+    ],
+    calcularPorTecnico(averias).map(fila => [
+      fila.nombre,
+      fila.asignadas,
+      fila.enAtencion,
+      fila.resueltas,
+      fila.rechazadas,
+      textoDuracion(fila.respuesta),
+      textoDuracion(fila.duracion)
+    ]),
+    [
+      "Todos",
+      asignadas.length,
+      contarPorEstado(asignadas, ...ESTADOS_ACTIVOS),
+      contarPorEstado(asignadas, "Resuelto", "Cerrado"),
+      contarPorEstado(asignadas, "Rechazado"),
+      textoDuracion(tiemposGenerales.respuesta),
+      textoDuracion(tiemposGenerales.duracion)
+    ]
+  );
 }
 
 function contarPorTipo(averias, tipo) {
@@ -380,7 +587,7 @@ function dibujarGraficos(averias) {
     calcularPorTipo(averias).map(fila => [fila.tipo, fila.cantidad])
   );
 
-  dibujarBarrasApiladas(
+  dibujarBarrasPorSerie(
     "graficoDepartamentos",
     "Departamento",
     TIPOS,
@@ -389,6 +596,60 @@ function dibujarGraficos(averias) {
       fila.hardware,
       fila.software
     ])
+  );
+
+  const porTecnico = calcularPorTecnico(averias);
+
+  dibujarBarrasPorSerie(
+    "graficoTecnicos",
+    "Técnico",
+    ["En atención", "Resueltas", "Rechazadas"],
+    porTecnico.map(fila => [
+      fila.nombre,
+      fila.enAtencion,
+      fila.resueltas,
+      fila.rechazadas
+    ])
+  );
+
+  dibujarTiemposPorTecnico(porTecnico);
+}
+
+// Barras agrupadas (una al lado de la otra, en la misma unidad):
+// respuesta y duración promedio de cada técnico con datos.
+function dibujarTiemposPorTecnico(porTecnico) {
+  const conDatos = porTecnico.filter(
+    fila => fila.respuesta !== null || fila.duracion !== null
+  );
+
+  const maximo = Math.max(
+    0,
+    ...conDatos.flatMap(fila => [fila.respuesta || 0, fila.duracion || 0])
+  );
+
+  const unidad = elegirUnidadTiempo(maximo);
+
+  // Valor numérico para la barra y texto legible para el tooltip.
+  const celda = milisegundos => milisegundos === null
+    ? null
+    : {
+        v: Math.round((milisegundos / unidad.milisegundos) * 10) / 10,
+        f: textoDuracion(milisegundos)
+      };
+
+  dibujarBarrasPorSerie(
+    "graficoTiempos",
+    "Técnico",
+    ["Respuesta promedio", "Duración promedio"],
+    conDatos.map(fila => [
+      fila.nombre,
+      celda(fila.respuesta),
+      celda(fila.duracion)
+    ]),
+    {
+      isStacked: false,
+      hAxis: { format: "#.#", title: unidad.nombre }
+    }
   );
 }
 
@@ -453,12 +714,17 @@ function dibujarBarras(contenedorId, titulo, filas, opciones = {}) {
   });
 }
 
-// Barras horizontales apiladas: una serie por cada elemento de "series".
+// Barras horizontales con una serie por cada elemento de "series".
+// Por defecto se apilan; con { isStacked: false } quedan agrupadas.
 // filas: [[etiqueta, valorSerie1, valorSerie2, ...], ...]
-function dibujarBarrasApiladas(contenedorId, titulo, series, filas, opciones = {}) {
+// Cada valor puede ser un número, null o { v: número, f: "texto" }.
+function dibujarBarrasPorSerie(contenedorId, titulo, series, filas, opciones = {}) {
   const contenedor = $(contenedorId);
 
-  if (!filas.some(([, ...valores]) => valores.some(valor => valor > 0))) {
+  const numero = valor =>
+    valor !== null && typeof valor === "object" ? valor.v : valor;
+
+  if (!filas.some(([, ...valores]) => valores.some(valor => numero(valor) > 0))) {
     mostrarSinDatos(contenedor);
     return;
   }
@@ -480,19 +746,22 @@ function dibujarBarrasApiladas(contenedorId, titulo, series, filas, opciones = {
       textStyle: { color: "#17243b" }
     },
     bar: { groupWidth: "60%" },
-    chartArea: { left: 130, top: 35, right: 30, bottom: 35 },
+    chartArea: { left: 130, top: 35, right: 30, bottom: 50 },
+    vAxis: {
+      textStyle: { color: "#17243b" }
+    },
+    ...opciones,
+    // El eje se combina para poder cambiar solo el formato o el título.
     hAxis: {
       minValue: 0,
       format: "0",
       gridlines: { color: "#e2e8f0" },
       minorGridlines: { count: 0 },
       baselineColor: "#cbd5e1",
-      textStyle: { color: "#64748b" }
-    },
-    vAxis: {
-      textStyle: { color: "#17243b" }
-    },
-    ...opciones
+      textStyle: { color: "#64748b" },
+      titleTextStyle: { color: "#64748b", italic: false },
+      ...(opciones.hAxis || {})
+    }
   });
 }
 

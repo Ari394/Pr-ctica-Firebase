@@ -802,6 +802,7 @@ function asignarTecnico(evento) {
   if (averia.estado === "Rechazado") {
     Object.assign(cambios, {
       fechaResolucion: null,
+      fechaFinAtencion: null,
       conformidad: null,
       motivoRechazo: null,
       fechaConformidad: null
