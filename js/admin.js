@@ -17,6 +17,9 @@ const ESTADOS_ACTIVOS = ["Asignado", "En proceso"];
 // Estados en los que el administrador puede asignar o reasignar.
 const ESTADOS_ASIGNABLES = ["Pendiente", "Asignado", "Rechazado"];
 
+// Valor del filtro de técnico para las averías sin asignar.
+const SIN_TECNICO = "sin-asignar";
+
 const $ = id => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", iniciar);
@@ -30,12 +33,29 @@ function iniciar() {
       });
     });
 
+  cargarOpcionesTecnicos();
+
   $("buscar").addEventListener("input", mostrarAverias);
 
-  $("filtroEstado").addEventListener(
-    "change",
-    mostrarAverias
-  );
+  [
+    "filtroEstado",
+    "filtroDepartamento",
+    "filtroTipo",
+    "filtroTecnico",
+    "filtroDesde",
+    "filtroHasta"
+  ].forEach(id => {
+    $(id).addEventListener("change", mostrarAverias);
+  });
+
+  $("formFiltros").addEventListener("submit", evento => {
+    evento.preventDefault();
+  });
+
+  $("btnLimpiarFiltros").addEventListener("click", () => {
+    $("formFiltros").reset();
+    mostrarAverias();
+  });
 
   $("btnVolver").addEventListener("click", () => {
     mostrarSeccion(seccionOrigen);
@@ -243,25 +263,97 @@ function crearTarjetaAveria(averia, detalleExtra = "") {
   return tarjeta;
 }
 
+function cargarOpcionesTecnicos() {
+  const selector = $("filtroTecnico");
+  selector.replaceChildren();
+
+  const opciones = [
+    { valor: "", texto: "Todos los técnicos" },
+    { valor: SIN_TECNICO, texto: "Sin asignar" },
+    ...RepositorioTecnicos
+      .obtenerTodos()
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+      .map(tecnico => ({
+        valor: tecnico.id,
+        texto: tecnico.nombre
+      }))
+  ];
+
+  opciones.forEach(({ valor, texto }) => {
+    const opcion = crearElemento("option", texto);
+    opcion.value = valor;
+    selector.appendChild(opcion);
+  });
+}
+
+function leerFiltros() {
+  return {
+    busqueda: $("buscar").value.trim().toLowerCase(),
+    estado: $("filtroEstado").value,
+    departamento: $("filtroDepartamento").value,
+    tipo: $("filtroTipo").value,
+    tecnicoId: $("filtroTecnico").value,
+    desde: $("filtroDesde").value,
+    hasta: $("filtroHasta").value
+  };
+}
+
+// Filtro común para el listado y las estadísticas.
+// Las fechas se comparan como texto en formato AAAA-MM-DD.
+function filtrarAverias(averias, filtros = {}) {
+  const {
+    busqueda = "",
+    estado = "",
+    departamento = "",
+    tipo = "",
+    tecnicoId = "",
+    desde = "",
+    hasta = ""
+  } = filtros;
+
+  return averias.filter(averia =>
+    (!estado || averia.estado === estado) &&
+    (!departamento || averia.departamento === departamento) &&
+    (!tipo || averia.tipo === tipo) &&
+    (
+      !tecnicoId ||
+      (tecnicoId === SIN_TECNICO
+        ? !averia.tecnicoId
+        : averia.tecnicoId === tecnicoId)
+    ) &&
+    (!desde || averia.fechaReporte >= desde) &&
+    (!hasta || averia.fechaReporte <= hasta) &&
+    (
+      !busqueda ||
+      averia.titulo.toLowerCase().includes(busqueda) ||
+      averia.id.toLowerCase().includes(busqueda)
+    )
+  );
+}
+
 function mostrarAverias() {
   const lista = $("listaAverias");
   lista.replaceChildren();
 
-  const busqueda = $("buscar")
-    .value.trim().toLowerCase();
+  const filtros = leerFiltros();
 
-  const filtro = $("filtroEstado").value;
+  // Evita elegir un rango de fechas invertido.
+  $("filtroHasta").min = filtros.desde;
+  $("filtroDesde").max = filtros.hasta;
+
+  if (filtros.desde && filtros.hasta && filtros.desde > filtros.hasta) {
+    $("conteoAverias").textContent = "";
+    mostrarVacio(
+      lista,
+      "La fecha inicial no puede ser posterior a la fecha final."
+    );
+    return;
+  }
 
   const todas = RepositorioAverias.obtenerTodas();
 
   const averias = ordenarPorFecha(
-    todas.filter(averia =>
-      (!filtro || averia.estado === filtro) &&
-      (
-        averia.titulo.toLowerCase().includes(busqueda) ||
-        averia.id.toLowerCase().includes(busqueda)
-      )
-    )
+    filtrarAverias(todas, filtros)
   );
 
   $("conteoAverias").textContent =

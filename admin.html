@@ -74,23 +74,75 @@
         </div>
       </div>
 
-      <div class="tarjeta filtros">
-        <input
-          id="buscar"
-          type="search"
-          placeholder="Buscar por título o número"
-        >
+      <form id="formFiltros" class="tarjeta filtros-avanzados">
+        <div class="campo campo-ancho">
+          <label for="buscar">Buscar</label>
+          <input
+            id="buscar"
+            type="search"
+            placeholder="Buscar por título o número"
+          >
+        </div>
 
-        <select id="filtroEstado">
-          <option value="">Todos los estados</option>
-          <option value="Pendiente">Pendiente</option>
-          <option value="Asignado">Asignado</option>
-          <option value="En proceso">En proceso</option>
-          <option value="Resuelto">Resuelto</option>
-          <option value="Cerrado">Cerrado</option>
-          <option value="Rechazado">Rechazado</option>
-        </select>
-      </div>
+        <div class="campo">
+          <label for="filtroEstado">Estado</label>
+          <select id="filtroEstado">
+            <option value="">Todos los estados</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Asignado">Asignado</option>
+            <option value="En proceso">En proceso</option>
+            <option value="Resuelto">Resuelto</option>
+            <option value="Cerrado">Cerrado</option>
+            <option value="Rechazado">Rechazado</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroDepartamento">Departamento</label>
+          <select id="filtroDepartamento">
+            <option value="">Todos los departamentos</option>
+            <option value="TI">Tecnologías de Información</option>
+            <option value="Administración">Administración</option>
+            <option value="Recursos Humanos">Recursos Humanos</option>
+            <option value="Contabilidad">Contabilidad</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroTipo">Clasificación</label>
+          <select id="filtroTipo">
+            <option value="">Hardware y software</option>
+            <option value="Hardware">Hardware</option>
+            <option value="Software">Software</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroTecnico">Técnico</label>
+          <select id="filtroTecnico"></select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroDesde">Desde</label>
+          <input id="filtroDesde" type="date">
+        </div>
+
+        <div class="campo">
+          <label for="filtroHasta">Hasta</label>
+          <input id="filtroHasta" type="date">
+        </div>
+
+        <div class="filtros-acciones campo-ancho">
+          <button
+            id="btnLimpiarFiltros"
+            class="boton secundario"
+            type="button"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </form>
 
       <div id="listaAverias"></div>
     </section>

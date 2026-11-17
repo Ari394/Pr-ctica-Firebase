@@ -198,6 +198,26 @@ small {
   padding: 18px;
 }
 
+.filtros-avanzados {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  padding: 18px;
+}
+
+.filtros-avanzados .campo {
+  margin-bottom: 0;
+}
+
+.campo-ancho {
+  grid-column: 1 / -1;
+}
+
+.filtros-acciones {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .reporte {
   background: white;
   border: 1px solid var(--borde);
@@ -385,6 +405,7 @@ footer {
   .dos-columnas,
   .detalle-datos,
   .filtros,
+  .filtros-avanzados,
   .indicadores {
     grid-template-columns: 1fr;
     gap: 5px;
