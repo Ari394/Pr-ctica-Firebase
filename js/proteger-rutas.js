@@ -85,8 +85,10 @@ if (pagina !== rutaPermitida) {
 });
 
 
-document.getElementById("btnCerrarSesion")
-  .addEventListener("click", async () => {
+const btnCerrarSesion = document.getElementById("btnCerrarSesion");
+
+if (btnCerrarSesion) {
+  btnCerrarSesion.addEventListener("click", async () => {
     try {
       await signOut(auth);
       window.location.replace("login.html");
@@ -95,3 +97,4 @@ document.getElementById("btnCerrarSesion")
       alert("No se pudo cerrar sesión. Inténtalo nuevamente.");
     }
   });
+}

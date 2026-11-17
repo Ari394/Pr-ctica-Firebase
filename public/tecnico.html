@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelpDesk | Panel del técnico</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/storage.js" defer></script>
+<script src="js/servicio-tecnico.js" defer></script>
+<script src="js/datos-prueba-tecnico.js" defer></script>
+
+<script src="js/firebase-service.js" defer></script>
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/proteger-rutas.js"></script>
+
+<script src="js/tecnico.js" defer></script>
+</head>
+<body>
+  
+<header class="encabezado">
+  <div class="contenedor barra">
+    <div>
+      <h1>HelpDesk</h1>
+      <p>Sistema de reportes de averías</p>
+    </div>
+
+    <span class="etiqueta">Portal del técnico</span>
+
+    <button
+      type="button"
+      id="btnCerrarSesion"
+      class="boton boton-secundario"
+    >
+      Cerrar sesión
+    </button>
+  </div>
+</header>
+
+
+  <main class="contenedor">
+    <section class="bienvenida">
+      <h2>Mis averías asignadas</h2>
+      <p>
+        Atendé las averías que te asignaron, registrá tu trabajo
+        y comunicate con el administrador.
+      </p>
+    </section>
+
+    <div id="mensaje" role="status" aria-live="polite"></div>
+
+    <section id="seccionPanel">
+      <div class="tarjeta filtros">
+        <select id="filtroEstado" aria-label="Filtrar por estado">
+          <option value="">Todos los estados</option>
+          <option value="Asignado">Asignado</option>
+          <option value="En proceso">En proceso</option>
+          <option value="Resuelto">Resuelto</option>
+          <option value="Rechazado">Rechazado</option>
+          <option value="Cerrado">Cerrado</option>
+        </select>
+      </div>
+
+      <div id="listaAsignadas"></div>
+    </section>
+
+    <section id="seccionDetalle" class="tarjeta oculto">
+      <button id="btnVolver" class="boton secundario" type="button">
+        Volver a mis averías
+      </button>
+
+      <div id="contenidoDetalle"></div>
+
+      <div id="accionesEstado" class="acciones"></div>
+
+      <h3>Agregar observación</h3>
+      <p class="subtitulo">
+        El usuario que reportó la avería podrá ver esta observación.
+      </p>
+      <form id="formObservacion">
+        <div class="campo">
+          <label for="textoObservacion">Observación</label>
+          <textarea
+            id="textoObservacion"
+            rows="3"
+            maxlength="1000"
+            required
+          ></textarea>
+        </div>
+        <button class="boton principal" type="submit">
+          Guardar observación
+        </button>
+      </form>
+
+      <h3>Evidencias de la reparación</h3>
+      <div id="listaEvidencias"></div>
+      <form id="formEvidencia">
+        <div class="campo">
+          <label for="archivoEvidencia">Fotografía</label>
+          <input
+            id="archivoEvidencia"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            required
+          >
+          <small>JPG, PNG o WEBP. Máximo 1 MB en esta versión local.</small>
+        </div>
+        <button class="boton principal" type="submit">
+          Subir evidencia
+        </button>
+      </form>
+
+      <h3>Historial de intervenciones</h3>
+      <div id="listaIntervenciones"></div>
+
+      <h3>Chat con el administrador</h3>
+      <div id="listaMensajes"></div>
+      <form id="formMensaje">
+        <div class="campo">
+          <label for="textoMensaje">Mensaje</label>
+          <textarea
+            id="textoMensaje"
+            rows="2"
+            maxlength="1000"
+            required
+          ></textarea>
+        </div>
+        <div class="acciones">
+          <button class="boton principal" type="submit">
+            Enviar mensaje
+          </button>
+          <button
+            id="btnActualizarChat"
+            class="boton secundario"
+            type="button"
+          >
+            Actualizar conversación
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <p>HelpDesk · Laboratorio 05 · Módulo del técnico</p>
+  </footer>
+</body>
+</html>

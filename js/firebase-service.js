@@ -43,6 +43,20 @@ const FirebaseService = (() => {
     return averia;
   }
 
+  // Obtener todas las averías para el administrador
+async function obtenerTodasAverias() {
+  verificarConexion();
+
+  const referencia = firestoreAPI.collection(db, "averias");
+
+  const resultado = await firestoreAPI.getDocs(referencia);
+
+  return resultado.docs.map(documento => ({
+    ...documento.data(),
+    id: documento.id
+  }));
+}
+
   async function obtenerAveriasUsuario(usuarioId) {
     verificarConexion();
 
@@ -76,6 +90,30 @@ const FirebaseService = (() => {
     const referencia = firestoreAPI.doc(db, "averias", id);
     await firestoreAPI.updateDoc(referencia, cambios);
   }
+
+  // Asignar una avería a un técnico desde el administrador
+async function asignarTecnicoAveria(id, cambios) {
+  verificarConexion();
+
+  const averia = await obtenerAveria(id);
+
+  if (!averia) {
+    throw new Error("No se encontró la avería.");
+  }
+
+  if (averia.estado !== "Pendiente") {
+    throw new Error(
+      "Por ahora solo se pueden asignar averías pendientes."
+    );
+  }
+
+  await actualizarAveria(id, cambios);
+
+  return {
+    ...averia,
+    ...cambios
+  };
+}
 
   async function aceptarSolucion(id) {
     return actualizarAveria(id, {
@@ -122,6 +160,23 @@ const FirebaseService = (() => {
       .map(documento => ({ ...documento.data(), id: documento.id }))
       .sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
   }
+
+  // Obtener los técnicos registrados en Firebase
+async function obtenerTecnicos() {
+  verificarConexion();
+
+  const consulta = firestoreAPI.query(
+    firestoreAPI.collection(db, "usuarios"),
+    firestoreAPI.where("rol", "==", "tecnico")
+  );
+
+  const resultado = await firestoreAPI.getDocs(consulta);
+
+  return resultado.docs.map(documento => ({
+    ...documento.data(),
+    id: documento.id
+  }));
+}
 
   async function obtenerAveriasTecnico(tecnicoId) {
     verificarConexion();
@@ -358,6 +413,9 @@ return {
   configurar,
   subirImagen,
   crearAveria,
+  obtenerTodasAverias,
+  obtenerTecnicos,
+  asignarTecnicoAveria,
   obtenerAveriasUsuario,
   obtenerAveria,
   actualizarAveria,

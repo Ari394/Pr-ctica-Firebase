@@ -1,3 +1,4 @@
+
 "use strict";
 
 // Vista del administrador para atender los chats de los técnicos.
@@ -15,9 +16,25 @@ const LONGITUD_MAXIMA_MENSAJE = 1000;
 // Avería cuya conversación está abierta.
 let conversacionActiva = null;
 
+// Control de inicialización y actualización de los chats.
+let chatsIniciados = false;
+let temporizadorChats = null;
+let actualizacionChatsEnCurso = false;
+
+// Control de lectura del administrador.
+// Se conserva localmente porque todavía no existe un servicio
+// de lecturas compartidas en Firebase.
+const CLAVE_LECTURAS_ADMIN = "helpdesk_lecturas_admin_firebase";
+
 document.addEventListener("DOMContentLoaded", iniciarChats);
 
 function iniciarChats() {
+  if (chatsIniciados) {
+    return;
+  }
+
+  chatsIniciados = true;
+
   $("formChat").addEventListener("submit", enviarMensajeChat);
 
   // Enter envía; Shift + Enter agrega un salto de línea.
@@ -28,17 +45,74 @@ function iniciarChats() {
     }
   });
 
-  // Recibe los cambios que el técnico hace en otras pestañas
-  // (mensajes nuevos o cambios de estado de la avería).
-  window.addEventListener("storage", () => {
-    if ($("seccionChats").classList.contains("oculto")) {
+  // Actualizar cuando el usuario administrador esté autenticado.
+  window.addEventListener("usuario-autenticado", () => {
+    if (window.USUARIO_FIREBASE?.rol === "administrador") {
       actualizarContadorChats();
-    } else {
-      mostrarChats();
+      iniciarActualizacionChats();
     }
   });
 
-  actualizarContadorChats();
+  // Actualizar cuando el administrador regrese a la pestaña.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && firebaseChatsDisponible()) {
+      actualizarChatsVisibles();
+    }
+  });
+
+  // Mantener compatibilidad con cambios locales.
+  window.addEventListener("storage", () => {
+    if (firebaseChatsDisponible()) {
+      actualizarChatsVisibles();
+    }
+  });
+
+  // Si la autenticación ya terminó, iniciar inmediatamente.
+  if (firebaseChatsDisponible()) {
+    actualizarContadorChats();
+    iniciarActualizacionChats();
+  }
+}
+
+function firebaseChatsDisponible() {
+  return (
+    window.USUARIO_FIREBASE?.rol === "administrador" &&
+    typeof FirebaseService !== "undefined"
+  );
+}
+
+function iniciarActualizacionChats() {
+  if (temporizadorChats !== null) {
+    return;
+  }
+
+  // Consultar periódicamente para detectar mensajes nuevos.
+  // No utiliza localStorage como fuente de mensajes.
+  temporizadorChats = setInterval(() => {
+    if (document.hidden || !firebaseChatsDisponible()) {
+      return;
+    }
+
+    actualizarChatsVisibles();
+  }, 5000);
+}
+
+async function actualizarChatsVisibles() {
+  if (actualizacionChatsEnCurso) {
+    return;
+  }
+
+  actualizacionChatsEnCurso = true;
+
+  try {
+    if ($("seccionChats").classList.contains("oculto")) {
+      await actualizarContadorChats();
+    } else {
+      await mostrarChats();
+    }
+  } finally {
+    actualizacionChatsEnCurso = false;
+  }
 }
 
 function generarIdMensaje() {
@@ -52,25 +126,83 @@ function generarIdMensaje() {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Lecturas del administrador.
+// Se guardan por usuario para no mezclar administradores distintos.
+function obtenerClaveLecturasAdmin() {
+  const usuarioId = window.USUARIO_FIREBASE?.uid || "admin";
+
+  return `${CLAVE_LECTURAS_ADMIN}_${usuarioId}`;
+}
+
+function obtenerLecturasAdmin() {
+  try {
+    const guardado = localStorage.getItem(
+      obtenerClaveLecturasAdmin()
+    );
+
+    return guardado ? JSON.parse(guardado) : {};
+  } catch (error) {
+    console.error("Error al leer las lecturas del chat:", error);
+    return {};
+  }
+}
+
+function marcarConversacionLeida(averiaId, fecha) {
+  if (!averiaId || !fecha) {
+    return;
+  }
+
+  try {
+    const lecturas = obtenerLecturasAdmin();
+
+    lecturas[averiaId] = fecha;
+
+    localStorage.setItem(
+      obtenerClaveLecturasAdmin(),
+      JSON.stringify(lecturas)
+    );
+  } catch (error) {
+    console.error("Error al marcar el chat como leído:", error);
+  }
+}
+
 // Una conversación por cada avería con técnico asignado o con mensajes.
+// Las averías y los mensajes se consultan directamente en Firestore.
 async function obtenerConversacionesAdmin() {
-  const averias = RepositorioAverias.obtenerTodas();
-  const lecturas = RepositorioLecturasChat.obtenerTodas();
+  if (!firebaseChatsDisponible()) {
+    return [];
+  }
+
+  const averias = await FirebaseService.obtenerTodasAverias();
+
+  const lecturas = obtenerLecturasAdmin();
+
+  // Las conversaciones pertenecen a averías con técnico asignado.
+  // Se incluyen también averías antiguas que tengan historial
+  // de asignaciones, aunque actualmente no tengan técnico.
+  const averiasConConversacion = averias.filter(averia =>
+    averia.tecnicoId ||
+    (Array.isArray(averia.historialAsignaciones) &&
+      averia.historialAsignaciones.length > 0)
+  );
 
   const conversaciones = await Promise.all(
-    averias.map(async averia => {
-      const mensajes = await RepositorioAverias.obtenerMensajes(averia.id);
+    averiasConConversacion.map(async averia => {
+      const mensajes = await FirebaseService.obtenerMensajes(
+        averia.id
+      );
+
       const ultimaLectura = lecturas[averia.id] || "";
 
       return {
         averia,
         mensajes,
         ultimoMensaje: mensajes[mensajes.length - 1] || null,
+
         // Las fechas ISO se pueden comparar como texto.
-        noLeidos: mensajes.filter(
-          mensaje =>
-            mensaje.autorRol !== ROL_ADMIN &&
-            mensaje.fecha > ultimaLectura
+        noLeidos: mensajes.filter(mensaje =>
+          mensaje.autorRol !== ROL_ADMIN &&
+          mensaje.fecha > ultimaLectura
         ).length
       };
     })
@@ -103,12 +235,19 @@ function pintarContadorChats(conversaciones) {
   const contador = $("contadorChats");
 
   contador.textContent = total > 99 ? "99+" : String(total);
+
   contador.classList.toggle("oculto", total === 0);
 }
 
 async function actualizarContadorChats() {
+  if (!firebaseChatsDisponible()) {
+    return;
+  }
+
   try {
-    pintarContadorChats(await obtenerConversacionesAdmin());
+    const conversaciones = await obtenerConversacionesAdmin();
+
+    pintarContadorChats(conversaciones);
   } catch (error) {
     console.error("Error al contar mensajes:", error);
   }
@@ -116,19 +255,25 @@ async function actualizarContadorChats() {
 
 function abrirConversacion(averiaId) {
   conversacionActiva = averiaId;
+
   mostrarSeccion("chats");
 }
 
 async function mostrarChats() {
+  if (!firebaseChatsDisponible()) {
+    return;
+  }
+
   try {
     const conversaciones = await obtenerConversacionesAdmin();
 
     const activa = conversaciones.find(
-      conversacion => conversacion.averia.id === conversacionActiva
+      conversacion =>
+        conversacion.averia.id === conversacionActiva
     ) || null;
 
     if (activa && activa.noLeidos > 0) {
-      RepositorioLecturasChat.marcarLeida(
+      marcarConversacionLeida(
         activa.averia.id,
         activa.ultimoMensaje.fecha
       );
@@ -141,11 +286,17 @@ async function mostrarChats() {
     ).length;
 
     $("conteoChats").textContent =
-      textoCantidad(conversaciones.length, "conversación", "conversaciones") +
+      textoCantidad(
+        conversaciones.length,
+        "conversación",
+        "conversaciones"
+      ) +
       ` · ${conMensajesNuevos} con mensajes nuevos.`;
 
     mostrarListaConversaciones(conversaciones);
+
     mostrarConversacionActiva(activa);
+
     pintarContadorChats(conversaciones);
   } catch (error) {
     mostrarMensaje("No se pudieron cargar los chats.", true);
@@ -155,6 +306,7 @@ async function mostrarChats() {
 
 function mostrarListaConversaciones(conversaciones) {
   const lista = $("listaConversaciones");
+
   lista.replaceChildren();
 
   if (!conversaciones.length) {
@@ -166,7 +318,11 @@ function mostrarListaConversaciones(conversaciones) {
   }
 
   conversaciones.forEach(conversacion => {
-    const { averia, ultimoMensaje, noLeidos } = conversacion;
+    const {
+      averia,
+      ultimoMensaje,
+      noLeidos
+    } = conversacion;
 
     const boton = crearElemento(
       "button",
@@ -178,10 +334,17 @@ function mostrarListaConversaciones(conversaciones) {
 
     boton.type = "button";
 
-    const superior = crearElemento("div", "", "conversacion-superior");
+    const superior = crearElemento(
+      "div",
+      "",
+      "conversacion-superior"
+    );
 
     superior.appendChild(
-      crearElemento("strong", averia.tecnicoNombre || "Sin técnico asignado")
+      crearElemento(
+        "strong",
+        averia.tecnicoNombre || "Sin técnico asignado"
+      )
     );
 
     if (noLeidos > 0) {
@@ -192,7 +355,11 @@ function mostrarListaConversaciones(conversaciones) {
 
     boton.append(
       superior,
-      crearElemento("span", averia.titulo, "conversacion-averia"),
+      crearElemento(
+        "span",
+        averia.titulo,
+        "conversacion-averia"
+      ),
       crearElemento(
         "span",
         ultimoMensaje
@@ -204,7 +371,9 @@ function mostrarListaConversaciones(conversaciones) {
 
     boton.addEventListener("click", async () => {
       conversacionActiva = averia.id;
+
       await mostrarChats();
+
       $("textoChat").focus();
     });
 
@@ -213,14 +382,24 @@ function mostrarListaConversaciones(conversaciones) {
 }
 
 function mostrarConversacionActiva(conversacion) {
-  $("chatVacio").classList.toggle("oculto", conversacion !== null);
-  $("chatContenido").classList.toggle("oculto", conversacion === null);
+  $("chatVacio").classList.toggle(
+    "oculto",
+    conversacion !== null
+  );
+
+  $("chatContenido").classList.toggle(
+    "oculto",
+    conversacion === null
+  );
 
   if (!conversacion) {
     return;
   }
 
-  const { averia, mensajes } = conversacion;
+  const {
+    averia,
+    mensajes
+  } = conversacion;
 
   $("chatTitulo").textContent =
     averia.tecnicoNombre || "Sin técnico asignado";
@@ -229,6 +408,7 @@ function mostrarConversacionActiva(conversacion) {
     `${averia.titulo} · ${averia.estado}`;
 
   const contenedor = $("chatMensajes");
+
   contenedor.replaceChildren();
 
   if (!mensajes.length) {
@@ -267,8 +447,15 @@ function mostrarConversacionActiva(conversacion) {
   // solo se puede consultar el historial.
   const puedeEscribir = Boolean(averia.tecnicoId);
 
-  $("formChat").classList.toggle("oculto", !puedeEscribir);
-  $("chatSoloLectura").classList.toggle("oculto", puedeEscribir);
+  $("formChat").classList.toggle(
+    "oculto",
+    !puedeEscribir
+  );
+
+  $("chatSoloLectura").classList.toggle(
+    "oculto",
+    puedeEscribir
+  );
 }
 
 async function enviarMensajeChat(evento) {
@@ -281,7 +468,10 @@ async function enviarMensajeChat(evento) {
   const texto = $("textoChat").value.trim();
 
   if (!texto) {
-    mostrarMensaje("Escribí un mensaje antes de enviar.", true);
+    mostrarMensaje(
+      "Escribí un mensaje antes de enviar.",
+      true
+    );
     return;
   }
 
@@ -293,35 +483,63 @@ async function enviarMensajeChat(evento) {
     return;
   }
 
-  const averia = RepositorioAverias.obtenerPorIdComoAdmin(
-    conversacionActiva
-  );
-
-  if (!averia || !averia.tecnicoId) {
+  if (!firebaseChatsDisponible()) {
     mostrarMensaje(
-      "La avería no tiene un técnico asignado.",
+      "La sesión del administrador no está disponible.",
       true
     );
     return;
   }
 
   try {
-    // Mismo formato que los mensajes del panel del técnico.
-    await RepositorioAverias.agregarMensaje({
+    // Consultar la avería real desde Firestore.
+    const averia = await FirebaseService.obtenerAveria(
+      conversacionActiva
+    );
+
+    if (!averia || !averia.tecnicoId) {
+      mostrarMensaje(
+        "La avería no tiene un técnico asignado.",
+        true
+      );
+      return;
+    }
+
+    // Obtener los datos reales del administrador autenticado.
+    const administrador = window.USUARIO_FIREBASE;
+
+    if (!administrador || administrador.rol !== "administrador") {
+      mostrarMensaje(
+        "No se pudo verificar al administrador.",
+        true
+      );
+      return;
+    }
+
+    // Guardar el mensaje en la colección mensajes de Firestore.
+    // Se conserva el mismo formato utilizado por el técnico.
+    await FirebaseService.agregarMensaje({
       id: generarIdMensaje(),
       averiaId: averia.id,
-      autorId: ADMIN_ACTUAL.uid,
-      autorNombre: ADMIN_ACTUAL.nombre,
+      autorId: administrador.uid,
+      autorNombre: administrador.nombre,
       autorRol: ROL_ADMIN,
       texto,
       fecha: new Date().toISOString()
     });
 
     $("formChat").reset();
+
     await mostrarChats();
+
     $("textoChat").focus();
+
   } catch (error) {
-    mostrarMensaje("No se pudo enviar el mensaje.", true);
+    mostrarMensaje(
+      "No se pudo enviar el mensaje.",
+      true
+    );
+
     console.error(error);
   }
 }
