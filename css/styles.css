@@ -327,6 +327,32 @@ small {
   border-radius: 12px;
 }
 
+.indicadores {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.indicador {
+  background: white;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.indicador strong {
+  font-size: 30px;
+}
+
+.indicador span {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 footer {
   text-align: center;
   padding: 25px;
@@ -342,7 +368,8 @@ footer {
 
   .dos-columnas,
   .detalle-datos,
-  .filtros {
+  .filtros,
+  .indicadores {
     grid-template-columns: 1fr;
     gap: 5px;
   }

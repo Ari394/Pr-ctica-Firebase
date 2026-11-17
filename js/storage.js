@@ -79,7 +79,33 @@ const RepositorioAverias = (() => {
     return averias[indice];
   }
 
+  // Uso exclusivo del administrador: no filtra por usuario.
+  function actualizarComoAdmin(id, cambios) {
+    const averias = obtenerTodas();
+
+    const indice = averias.findIndex(
+      averia => averia.id === id
+    );
+
+    if (indice === -1) {
+      throw new Error("No se encontró la avería.");
+    }
+
+    averias[indice] = {
+      ...averias[indice],
+      ...cambios,
+      id: averias[indice].id,
+      usuarioId: averias[indice].usuarioId
+    };
+
+    guardarTodas(averias);
+
+    return averias[indice];
+  }
+
   return {
+    obtenerTodas,
+    actualizarComoAdmin,
     crear,
     obtenerPorUsuario,
     obtenerPorId,

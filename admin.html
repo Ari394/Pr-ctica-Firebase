@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelpDesk | Administración</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/storage.js" defer></script>
+  <script src="js/storage-tecnicos.js" defer></script>
+  <script src="js/admin.js" defer></script>
+</head>
+<body>
+  <header class="encabezado">
+    <div class="contenedor barra">
+      <div>
+        <h1>HelpDesk</h1>
+        <p>Sistema de reportes de averías</p>
+      </div>
+      <span class="etiqueta">Panel del administrador</span>
+    </div>
+  </header>
+
+  <main class="contenedor">
+    <section class="bienvenida">
+      <h2>Administración general</h2>
+      <p>
+        Gestioná las averías reportadas, asigná técnicos
+        y consultá las estadísticas del servicio.
+      </p>
+    </section>
+
+    <nav class="navegacion" aria-label="Secciones">
+      <button
+        class="activo"
+        type="button"
+        data-seccion="resumen"
+      >
+        Resumen
+      </button>
+    </nav>
+
+    <section id="seccionResumen" data-seccion="resumen">
+      <div class="titulo-seccion">
+        <div>
+          <h2>Resumen general</h2>
+          <p>Estado actual de las averías y del equipo técnico.</p>
+        </div>
+      </div>
+
+      <div id="indicadores" class="indicadores"></div>
+    </section>
+
+    <div id="mensaje" role="status" aria-live="polite"></div>
+  </main>
+
+  <footer>
+    <p>HelpDesk · Laboratorio 05 · Módulo de administración</p>
+  </footer>
+</body>
+</html>
