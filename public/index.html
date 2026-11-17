@@ -1,0 +1,276 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelpDesk | Mis averías</title>
+  <link rel="stylesheet" href="css/styles.css">
+<script src="js/storage.js" defer></script>
+<script src="js/firebase-service.js" defer></script>
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/proteger-rutas.js"></script>
+<script src="js/app.js" defer></script>
+
+</head>
+<body>
+  <header class="encabezado">
+    <div class="contenedor barra">
+      <div>
+        <h1>HelpDesk</h1>
+        <p>Sistema de reportes de averías</p>
+      </div>
+      <span class="etiqueta">Portal del usuario</span>
+    <button id="btnCerrarSesion" class="boton secundario" type="button">
+  Cerrar sesión
+</button>
+    </div>
+  </header>
+
+  <main class="contenedor">
+    <section class="bienvenida">
+      <h2>Gestión de mis averías</h2>
+      <p>
+        Registrá problemas de hardware o software
+        y consultá el seguimiento de tus solicitudes.
+      </p>
+    </section>
+
+    
+  <nav class="navegacion" aria-label="Secciones">
+    <button id="btnRegistro" class="activo" type="button">
+      Nueva avería
+    </button>
+
+    <button id="btnListado" type="button">
+      Mis reportes
+    </button>
+
+    <button id="btnPerfil" type="button">
+      Mi perfil
+    </button>
+  </nav>
+
+
+    <section id="seccionRegistro" class="tarjeta">
+      <h2>Registrar nueva avería</h2>
+      <p class="subtitulo">
+        Completá los datos del problema que necesitás reportar.
+      </p>
+
+      <form id="formAveria">
+        <div class="campo">
+          <label for="titulo">Título del problema *</label>
+          <input
+            id="titulo"
+            type="text"
+            maxlength="100"
+            placeholder="Ej. Computadora no enciende"
+            required
+          >
+        </div>
+
+        <div class="campo">
+          <label for="descripcion">Descripción *</label>
+          <textarea
+            id="descripcion"
+            rows="5"
+            maxlength="2000"
+            placeholder="Explicá qué sucede con el equipo o sistema"
+            required
+          ></textarea>
+        </div>
+
+        <div class="dos-columnas">
+          <div class="campo">
+            <label for="departamento">Departamento *</label>
+            <select id="departamento" required>
+              <option value="">Seleccionar</option>
+              <option value="TI">Tecnologías de Información</option>
+              <option value="Administración">Administración</option>
+              <option value="Recursos Humanos">Recursos Humanos</option>
+              <option value="Contabilidad">Contabilidad</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="tipo">Tipo de avería *</label>
+            <select id="tipo" required>
+              <option value="">Seleccionar</option>
+              <option value="Hardware">Hardware</option>
+              <option value="Software">Software</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="dos-columnas">
+          <div class="campo">
+            <label for="fecha">Fecha del reporte *</label>
+            <input id="fecha" type="date" required>
+          </div>
+
+          <div class="campo">
+            <label for="imagen">Fotografía (opcional)</label>
+            <input
+              id="imagen"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+            >
+            <small>
+              JPG, PNG o WEBP. Máximo 1 MB en esta versión local.
+            </small>
+          </div>
+        </div>
+
+        <button class="boton principal" type="submit">
+          Registrar avería
+        </button>
+      </form>
+    </section>
+
+    <section id="seccionListado" class="oculto">
+      <div class="titulo-seccion">
+        <div>
+          <h2>Mis averías reportadas</h2>
+          <p>
+            Consultá el estado y seguimiento de tus solicitudes.
+          </p>
+        </div>
+      </div>
+
+      <div class="tarjeta filtros">
+        <input
+          id="buscar"
+          type="search"
+          placeholder="Buscar por título o número"
+        >
+
+        <select id="filtroEstado">
+          <option value="">Todos los estados</option>
+          <option value="Pendiente">Pendiente</option>
+          <option value="Asignado">Asignado</option>
+          <option value="En proceso">En proceso</option>
+          <option value="Resuelto">Resuelto</option>
+          <option value="Cerrado">Cerrado</option>
+          <option value="Rechazado">Rechazado</option>
+        </select>
+      </div>
+
+      <div id="listaAverias"></div>
+    </section>
+
+    <section id="seccionDetalle" class="tarjeta oculto">
+      <button
+        id="btnVolver"
+        class="boton secundario"
+        type="button"
+      >
+        Volver a mis reportes
+      </button>
+
+      <div id="contenidoDetalle"></div>
+
+      <div id="accionesSolucion" class="oculto">
+        <h3>Confirmación de la solución</h3>
+        <p>¿El problema fue solucionado correctamente?</p>
+
+        <div class="acciones">
+          <button
+            id="btnAceptar"
+            class="boton exito"
+            type="button"
+          >
+            Aceptar solución
+          </button>
+
+          <button
+            id="btnRechazar"
+            class="boton peligro"
+            type="button"
+          >
+            Rechazar solución
+          </button>
+        </div>
+      </div>
+
+      <form id="formRechazo" class="oculto">
+        <div class="campo">
+          <label for="motivoRechazo">
+            Motivo del rechazo *
+          </label>
+
+          <textarea
+            id="motivoRechazo"
+            rows="4"
+            required
+            placeholder="Explicá por qué no aceptás la solución"
+          ></textarea>
+        </div>
+
+        <button class="boton peligro" type="submit">
+          Confirmar rechazo
+        </button>
+      </form>
+    </section>
+ 
+    
+<!-- PERFIL DEL USUARIO -->
+<section id="seccionPerfil" class="tarjeta oculto">
+
+  <h2>Mi perfil</h2>
+
+  <p class="subtitulo">
+    Consultá y actualizá tu información personal.
+  </p>
+
+  <form id="formPerfil">
+
+    <div class="campo">
+      <label for="perfilNombre">Nombre completo</label>
+
+      <input
+        id="perfilNombre"
+        type="text"
+        maxlength="100"
+        required
+        placeholder="Tu nombre completo"
+      >
+    </div>
+
+    <div class="campo">
+      <label for="perfilCorreo">Correo electrónico</label>
+
+      <input
+        id="perfilCorreo"
+        type="email"
+        readonly
+      >
+    </div>
+
+    <div class="campo">
+      <label for="perfilRol">Rol del usuario</label>
+
+      <input
+        id="perfilRol"
+        type="text"
+        readonly
+      >
+    </div>
+
+    <button class="boton principal" type="submit">
+      Guardar cambios
+    </button>
+
+  </form>
+
+</section>
+
+    <div id="mensaje" role="status" aria-live="polite"></div>
+  </main>
+
+  <footer>
+    <p>HelpDesk · Laboratorio 05 · Módulo de usuario</p>
+  </footer>
+</body>
+</html>

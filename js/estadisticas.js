@@ -40,6 +40,7 @@ const DEPARTAMENTOS = [
 const TIPOS = ["Hardware", "Software"];
 
 let cargaGoogleCharts = null;
+let tecnicosEstadisticas = [];
 let temporizadorRedimension = null;
 
 document.addEventListener("DOMContentLoaded", iniciarEstadisticas);
@@ -258,15 +259,23 @@ function calcularTiemposPromedio(averias) {
 
 // Técnicos registrados, más los que aparecen en averías antiguas
 // aunque ya no estén en la lista.
+
 function tecnicosEnDatos(averias) {
+  // Técnicos registrados en Firebase.
   const tecnicos = new Map(
-    RepositorioTecnicos
-      .obtenerTodos()
-      .map(tecnico => [tecnico.id, tecnico.nombre])
+    tecnicosEstadisticas.map(tecnico => [
+      tecnico.id,
+      tecnico.nombre
+    ])
   );
 
+  // Incluir técnicos de averías antiguas,
+  // aunque ya no estén registrados en Firebase.
   averias.forEach(averia => {
-    if (averia.tecnicoId && !tecnicos.has(averia.tecnicoId)) {
+    if (
+      averia.tecnicoId &&
+      !tecnicos.has(averia.tecnicoId)
+    ) {
       tecnicos.set(
         averia.tecnicoId,
         averia.tecnicoNombre || averia.tecnicoId
@@ -274,10 +283,15 @@ function tecnicosEnDatos(averias) {
     }
   });
 
+  // Ordenar alfabéticamente por nombre.
   return [...tecnicos]
-    .map(([id, nombre]) => ({ id, nombre }))
+    .map(([id, nombre]) => ({
+      id,
+      nombre
+    }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
+
 
 function calcularPorTecnico(averias) {
   return tecnicosEnDatos(averias).map(({ id, nombre }) => {
@@ -397,34 +411,56 @@ async function mostrarEstadisticas() {
     return;
   }
 
-  const averias = filtrarAverias(
-    RepositorioAverias.obtenerTodas(),
-    periodo
-  );
-
   $("periodoEstadisticas").textContent =
-    `${textoPeriodo(periodo)} · ` +
-    textoCantidad(averias.length, "avería reportada", "averías reportadas") +
-    ".";
-
-  mostrarIndicadoresPeriodo(averias);
-  mostrarIndicadoresTiempos(averias);
-
-  // Las tablas no dependen de Google Charts.
-  mostrarTablasEstadisticas(averias);
+    "Cargando estadísticas desde Firebase...";
 
   try {
-    await cargarGoogleCharts();
-    $("avisoGraficos").classList.add("oculto");
-    dibujarGraficos(averias);
+    // Consultar las averías registradas en Firestore.
+    const todas = await FirebaseService.obtenerTodasAverias();
+
+    // Consultar los técnicos reales de Firebase.
+    tecnicosEstadisticas = await FirebaseService.obtenerTecnicos();
+
+    // Aplicar el filtro de fechas original.
+    const averias = filtrarAverias(todas, periodo);
+
+    $("periodoEstadisticas").textContent =
+      `${textoPeriodo(periodo)} · ` +
+      textoCantidad(
+        averias.length,
+        "avería reportada",
+        "averías reportadas"
+      ) + ".";
+
+    mostrarIndicadoresPeriodo(averias);
+    mostrarIndicadoresTiempos(averias);
+
+    // Las tablas no dependen de Google Charts.
+    mostrarTablasEstadisticas(averias);
+
+    try {
+      await cargarGoogleCharts();
+
+      $("avisoGraficos").classList.add("oculto");
+      dibujarGraficos(averias);
+
+    } catch (error) {
+      $("avisoGraficos").textContent =
+        "No se pudieron cargar los gráficos de Google Charts. " +
+        "Revisá la conexión a internet y recargá la página.";
+
+      $("avisoGraficos").classList.remove("oculto");
+      console.error(error);
+    }
+
   } catch (error) {
-    $("avisoGraficos").textContent =
-      "No se pudieron cargar los gráficos de Google Charts. " +
-      "Revisá la conexión a internet y recargá la página.";
-    $("avisoGraficos").classList.remove("oculto");
-    console.error(error);
+    console.error("Error al cargar estadísticas:", error);
+
+    $("periodoEstadisticas").textContent =
+      "No se pudieron consultar las estadísticas desde Firebase.";
   }
 }
+
 
 function mostrarIndicadoresPeriodo(averias) {
   const total = averias.length;

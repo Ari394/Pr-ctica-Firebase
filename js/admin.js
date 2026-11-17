@@ -6,6 +6,9 @@ const ADMIN_ACTUAL = {
   nombre: "Administrador de prueba"
 };
 
+// Técnicos registrados en Firebase
+let tecnicosFirebase = [];
+
 // Sección desde la que se abrió el detalle, para poder volver.
 let seccionOrigen = "averias";
 
@@ -31,7 +34,40 @@ const TIPOS_SERVICIO = [
 
 const $ = id => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", iniciar);
+// Iniciar el administrador cuando Firebase autorice el acceso
+let administradorIniciado = false;
+
+function iniciarAdministrador() {
+  if (administradorIniciado) return;
+
+  if (window.USUARIO_FIREBASE?.rol !== "administrador") {
+    return;
+  }
+
+  if (!window.HelpDeskFirebase) {
+    return;
+  }
+
+  const { db, storage, firestoreAPI, storageAPI } =
+    window.HelpDeskFirebase;
+
+  FirebaseService.configurar(
+    db,
+    storage,
+    firestoreAPI,
+    storageAPI
+  );
+
+  administradorIniciado = true;
+  iniciar();
+}
+
+window.addEventListener(
+  "usuario-autenticado",
+  iniciarAdministrador
+);
+
+iniciarAdministrador();
 
 function iniciar() {
   document
@@ -280,16 +316,34 @@ function crearTarjetaAveria(averia, detalleExtra = "") {
 
   return tarjeta;
 }
-
-function cargarOpcionesTecnicos() {
+async function cargarOpcionesTecnicos() {
   const selector = $("filtroTecnico");
   selector.replaceChildren();
+
+  let tecnicos = [];
+
+  try {
+    tecnicos = await FirebaseService.obtenerTecnicos();
+  } catch (error) {
+    console.error("Error al cargar técnicos:", error);
+
+    const opcion = crearElemento(
+      "option",
+      "No se pudieron cargar los técnicos"
+    );
+
+    opcion.value = "";
+    selector.appendChild(opcion);
+    selector.disabled = true;
+    return;
+  }
+
+  selector.disabled = false;
 
   const opciones = [
     { valor: "", texto: "Todos los técnicos" },
     { valor: SIN_TECNICO, texto: "Sin asignar" },
-    ...RepositorioTecnicos
-      .obtenerTodos()
+    ...tecnicos
       .sort((a, b) => a.nombre.localeCompare(b.nombre))
       .map(tecnico => ({
         valor: tecnico.id,
@@ -303,7 +357,6 @@ function cargarOpcionesTecnicos() {
     selector.appendChild(opcion);
   });
 }
-
 function cargarOpcionesServicio() {
   const selector = $("tipoServicio");
 
@@ -363,7 +416,7 @@ function filtrarAverias(averias, filtros = {}) {
   );
 }
 
-function mostrarAverias() {
+async function mostrarAverias() {
   const lista = $("listaAverias");
   lista.replaceChildren();
 
@@ -382,7 +435,22 @@ function mostrarAverias() {
     return;
   }
 
-  const todas = RepositorioAverias.obtenerTodas();
+ let todas;
+
+try {
+  todas = await FirebaseService.obtenerTodasAverias();
+} catch (error) {
+  console.error("Error al consultar averías:", error);
+
+  $("conteoAverias").textContent = "";
+
+  mostrarVacio(
+    lista,
+    "No se pudieron cargar las averías desde Firebase."
+  );
+
+  return;
+}
 
   const averias = ordenarPorFecha(
     filtrarAverias(todas, filtros)
@@ -408,17 +476,32 @@ function mostrarAverias() {
   });
 }
 
-function mostrarPendientes() {
+async function mostrarPendientes() {
   const lista = $("listaPendientes");
   lista.replaceChildren();
 
-  // Las más antiguas primero: son las que deben atenderse antes.
-  const pendientes = ordenarPorFecha(
-    RepositorioAverias
-      .obtenerTodas()
-      .filter(averia => averia.estado === "Pendiente"),
-    true
+  
+let todas;
+
+try {
+  todas = await FirebaseService.obtenerTodasAverias();
+} catch (error) {
+  console.error("Error al consultar averías pendientes:", error);
+
+  $("conteoPendientes").textContent = "";
+
+  mostrarVacio(
+    lista,
+    "No se pudieron cargar las averías pendientes desde Firebase."
   );
+
+  return;
+}
+
+const pendientes = ordenarPorFecha(
+  todas.filter(averia => averia.estado === "Pendiente"),
+  true
+);
 
   $("conteoPendientes").textContent =
     textoCantidad(
@@ -469,8 +552,21 @@ function agregarDato(
   contenedor.appendChild(dato);
 }
 
-function verDetalle(id) {
-  const averia = RepositorioAverias.obtenerPorIdComoAdmin(id);
+async function verDetalle(id) {
+  let averia;
+
+try {
+  averia = await FirebaseService.obtenerAveria(id);
+} catch (error) {
+  console.error("Error al consultar el detalle:", error);
+
+  mostrarMensaje(
+    "No se pudo cargar el detalle de la avería desde Firebase.",
+    true
+  );
+
+  return;
+}
 
   if (!averia) {
     mostrarMensaje(
@@ -619,15 +715,29 @@ function verDetalle(id) {
     });
   }
 
-  prepararAsignacion(averia);
+ try {
+  await prepararAsignacion(averia);
+} catch (error) {
+  console.error("Error al cargar técnicos:", error);
 
-  mostrarSeccion("detalle");
+  $("formAsignacion").classList.add("oculto");
+
+  mostrarMensaje(
+    "No se pudieron cargar los técnicos desde Firebase.",
+    true
+  );
 }
 
-function tecnicosConCarga() {
-  const averias = RepositorioAverias.obtenerTodas();
+mostrarSeccion("detalle");
+}
 
-  return RepositorioTecnicos.obtenerTodos().map(tecnico => {
+async function tecnicosConCarga() {
+  const [averias, tecnicos] = await Promise.all([
+    FirebaseService.obtenerTodasAverias(),
+    FirebaseService.obtenerTecnicos()
+  ]);
+
+  return tecnicos.map(tecnico => {
     const activas = averias.filter(
       averia =>
         averia.tecnicoId === tecnico.id &&
@@ -636,18 +746,35 @@ function tecnicosConCarga() {
 
     return {
       ...tecnico,
+      especialidad: tecnico.especialidad || "Sin especialidad",
       activas,
       disponible: activas.length === 0
     };
   });
 }
 
-function mostrarTecnicos() {
+async function mostrarTecnicos() {
   const lista = $("listaTecnicos");
   lista.replaceChildren();
 
   const filtro = $("filtroTecnicos").value;
-  const todos = tecnicosConCarga();
+
+let todos;
+
+try {
+  todos = await tecnicosConCarga();
+} catch (error) {
+  console.error("Error al consultar técnicos:", error);
+
+  $("conteoTecnicos").textContent = "";
+
+  mostrarVacio(
+    lista,
+    "No se pudieron cargar los técnicos desde Firebase."
+  );
+
+  return;
+}
 
   const disponibles = todos.filter(
     tecnico => tecnico.disponible
@@ -725,9 +852,9 @@ function mostrarTecnicos() {
   });
 }
 
-function prepararAsignacion(averia) {
+async function prepararAsignacion(averia) {
   const formulario = $("formAsignacion");
-  const puedeAsignar = ESTADOS_ASIGNABLES.includes(averia.estado);
+  const puedeAsignar = averia.estado === "Pendiente";
 
   formulario.classList.toggle("oculto", !puedeAsignar);
 
@@ -744,8 +871,10 @@ function prepararAsignacion(averia) {
 
   // Primero los disponibles con la especialidad de la avería,
   // luego el resto según su carga de trabajo.
-  const tecnicos = tecnicosConCarga()
-    .filter(tecnico => tecnico.id !== averia.tecnicoId)
+tecnicosFirebase = await tecnicosConCarga();
+
+const tecnicos = tecnicosFirebase
+  .filter(tecnico => tecnico.id !== averia.tecnicoId)
     .sort((a, b) =>
       Number(b.disponible) - Number(a.disponible) ||
       Number(b.especialidad === averia.tipo) -
@@ -776,14 +905,21 @@ function prepararAsignacion(averia) {
   });
 }
 
-function asignarTecnico(evento) {
+async function asignarTecnico(evento) {
   evento.preventDefault();
 
-  const averia = RepositorioAverias.obtenerPorIdComoAdmin(
+  let averia;
+
+try {
+  averia = await FirebaseService.obtenerAveria(
     averiaSeleccionada
   );
-
-  if (!averia || !ESTADOS_ASIGNABLES.includes(averia.estado)) {
+} catch (error) {
+  console.error("Error al consultar la avería:", error);
+  mostrarMensaje("No se pudo consultar la avería.", true);
+  return;
+}
+ if (!averia || averia.estado !== "Pendiente") {
     mostrarMensaje(
       "Esta avería ya no se puede asignar.",
       true
@@ -791,9 +927,9 @@ function asignarTecnico(evento) {
     return;
   }
 
-  const tecnico = RepositorioTecnicos.obtenerPorId(
-    $("tecnicoAsignado").value
-  );
+  const tecnico = tecnicosFirebase.find(
+  tecnico => tecnico.id === $("tecnicoAsignado").value
+);
 
   if (!tecnico) {
     mostrarMensaje("Seleccioná un técnico.", true);
@@ -813,7 +949,7 @@ function asignarTecnico(evento) {
     tecnicoId: tecnico.id,
     tecnicoNombre: tecnico.nombre,
     fecha: ahora,
-    asignadoPor: ADMIN_ACTUAL.nombre,
+    asignadoPor: window.USUARIO_FIREBASE.nombre,
     motivoRechazo:
       averia.estado === "Rechazado"
         ? averia.motivoRechazo
@@ -846,10 +982,12 @@ function asignarTecnico(evento) {
   }
 
   try {
-    RepositorioAverias.actualizarComoAdmin(averia.id, cambios);
+    await FirebaseService.asignarTecnicoAveria(
+  averia.id,
+  cambios
+);
 
-    verDetalle(averia.id);
-
+await verDetalle(averia.id);
     mostrarMensaje(
       `Avería asignada a ${tecnico.nombre}.`
     );
@@ -868,60 +1006,83 @@ function contarPorEstado(averias, ...estados) {
   ).length;
 }
 
-function mostrarResumen() {
-  const averias = RepositorioAverias.obtenerTodas();
-  const tecnicos = tecnicosConCarga();
-
-  const disponibles = tecnicos.filter(
-    tecnico => tecnico.disponible
-  ).length;
-
-  const indicadores = [
-    {
-      titulo: "Averías registradas",
-      valor: averias.length
-    },
-    {
-      titulo: "Pendientes de asignar",
-      valor: contarPorEstado(averias, "Pendiente"),
-      clase: "estado-pendiente"
-    },
-    {
-      titulo: "En atención",
-      valor: contarPorEstado(averias, "Asignado", "En proceso"),
-      clase: "estado-en-proceso"
-    },
-    {
-      titulo: "Resueltas o cerradas",
-      valor: contarPorEstado(averias, "Resuelto", "Cerrado"),
-      clase: "estado-cerrado"
-    },
-    {
-      titulo: "Rechazadas",
-      valor: contarPorEstado(averias, "Rechazado"),
-      clase: "estado-rechazado"
-    },
-    {
-      titulo: "Técnicos disponibles",
-      valor: `${disponibles} de ${tecnicos.length}`
-    }
-  ];
-
+async function mostrarResumen() {
   const contenedor = $("indicadores");
+
   contenedor.replaceChildren();
+  mostrarMensaje("Cargando resumen desde Firebase...");
 
-  indicadores.forEach(indicador => {
-    const tarjeta = crearElemento(
-      "article",
-      "",
-      `indicador ${indicador.clase || ""}`.trim()
+  try {
+    // Obtener averías y técnicos desde Firebase
+    const [averias, tecnicos] = await Promise.all([
+      FirebaseService.obtenerTodasAverias(),
+      tecnicosConCarga()
+    ]);
+
+    // Calcular técnicos disponibles
+    const disponibles = tecnicos.filter(
+      tecnico => tecnico.disponible
+    ).length;
+
+    // Crear indicadores del resumen
+    const indicadores = [
+      {
+        titulo: "Averías registradas",
+        valor: averias.length
+      },
+      {
+        titulo: "Pendientes de asignar",
+        valor: contarPorEstado(averias, "Pendiente"),
+        clase: "estado-pendiente"
+      },
+      {
+        titulo: "En atención",
+        valor: contarPorEstado(averias, "Asignado", "En proceso"),
+        clase: "estado-en-proceso"
+      },
+      {
+        titulo: "Resueltas o cerradas",
+        valor: contarPorEstado(averias, "Resuelto", "Cerrado"),
+        clase: "estado-cerrado"
+      },
+      {
+        titulo: "Rechazadas",
+        valor: contarPorEstado(averias, "Rechazado"),
+        clase: "estado-rechazado"
+      },
+      {
+        titulo: "Técnicos disponibles",
+        valor: `${disponibles} de ${tecnicos.length}`
+      }
+    ];
+
+    // Mostrar las tarjetas
+    indicadores.forEach(indicador => {
+      const tarjeta = crearElemento(
+        "article",
+        "",
+        `indicador ${indicador.clase || ""}`.trim()
+      );
+
+      tarjeta.append(
+        crearElemento("strong", String(indicador.valor)),
+        crearElemento("span", indicador.titulo)
+      );
+
+      contenedor.appendChild(tarjeta);
+    });
+
+    mostrarMensaje("");
+
+  } catch (error) {
+    console.error("Error al cargar el resumen:", error);
+
+    contenedor.replaceChildren();
+
+    mostrarMensaje(
+      "No se pudo cargar el resumen desde Firebase.",
+      true
     );
-
-    tarjeta.append(
-      crearElemento("strong", String(indicador.valor)),
-      crearElemento("span", indicador.titulo)
-    );
-
-    contenedor.appendChild(tarjeta);
-  });
+  }
 }
+

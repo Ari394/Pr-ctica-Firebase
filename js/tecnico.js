@@ -1,13 +1,8 @@
 "use strict";
 
-//tecnico de prueba previo a migrar a firebase para que persona 4 tenga que asignar!!!!!!
-const TECNICO_ACTUAL = {
-  uid: "tecnico-demo-001",
-  nombre: "Técnico de prueba",
-  rol: "Tecnico"
-};
+let TECNICO_ACTUAL = null;
 
-ServicioTecnico.configurar(RepositorioAverias);
+
 
 const ETIQUETAS_ACCION = {
   "En proceso": { Asignado: "Iniciar atención", Rechazado: "Retomar atención" },
@@ -18,7 +13,35 @@ let averiaSeleccionada = null;
 
 const $ = id => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", iniciar);
+document.addEventListener("DOMContentLoaded", () => {
+  let iniciado = false;
+
+  function iniciarTecnico() {
+    if (iniciado || !window.USUARIO_FIREBASE) {
+      return;
+    }
+
+    if (window.USUARIO_FIREBASE.rol !== "tecnico") {
+      return;
+    }
+
+    
+TECNICO_ACTUAL = {
+  uid: window.USUARIO_FIREBASE.uid,
+  nombre: window.USUARIO_FIREBASE.nombre,
+  rol: "Tecnico"
+};
+
+ServicioTecnico.configurar(FirebaseService);
+
+iniciado = true;
+iniciar();
+
+  }
+
+  window.addEventListener("usuario-autenticado", iniciarTecnico);
+  iniciarTecnico();
+});
 
 function iniciar() {
   $("btnVolver").addEventListener("click", mostrarPanel);
