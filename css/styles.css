@@ -312,6 +312,44 @@ small {
   height: 300px;
 }
 
+.grafico-ancho {
+  grid-column: 1 / -1;
+}
+
+.tabla-contenedor {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.tabla-resumen {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.tabla-resumen th,
+.tabla-resumen td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--borde);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tabla-resumen th {
+  color: var(--gris);
+  font-size: 13px;
+}
+
+.tabla-resumen .numero {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla-resumen tfoot td {
+  font-weight: bold;
+  border-bottom: none;
+}
+
 #avisoGraficos {
   margin-bottom: 15px;
 }

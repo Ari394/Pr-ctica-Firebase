@@ -28,6 +28,17 @@ const ESTADOS = [
   "Rechazado"
 ];
 
+// Mismos valores que el formulario de registro de averías.
+const DEPARTAMENTOS = [
+  "TI",
+  "Administración",
+  "Recursos Humanos",
+  "Contabilidad",
+  "Otro"
+];
+
+const TIPOS = ["Hardware", "Software"];
+
 let cargaGoogleCharts = null;
 let temporizadorRedimension = null;
 
@@ -156,6 +167,48 @@ function calcularPorEstado(averias) {
   ]);
 }
 
+// Valores conocidos en orden fijo, más cualquier otro que aparezca
+// en los datos, para no perder averías con valores nuevos.
+function valoresPresentes(conocidos, averias, campo) {
+  const adicionales = new Set(
+    averias
+      .map(averia => averia[campo])
+      .filter(valor => valor && !conocidos.includes(valor))
+  );
+
+  return [...conocidos, ...adicionales];
+}
+
+function calcularPorTipo(averias) {
+  return valoresPresentes(TIPOS, averias, "tipo").map(tipo => {
+    const cantidad = averias.filter(
+      averia => averia.tipo === tipo
+    ).length;
+
+    return {
+      tipo,
+      cantidad,
+      porcentaje: porcentaje(cantidad, averias.length)
+    };
+  });
+}
+
+function calcularPorDepartamento(averias) {
+  return valoresPresentes(DEPARTAMENTOS, averias, "departamento").map(departamento => {
+    const delDepartamento = averias.filter(
+      averia => averia.departamento === departamento
+    );
+
+    return {
+      departamento,
+      hardware: delDepartamento.filter(averia => averia.tipo === "Hardware").length,
+      software: delDepartamento.filter(averia => averia.tipo === "Software").length,
+      total: delDepartamento.length,
+      porcentaje: porcentaje(delDepartamento.length, averias.length)
+    };
+  });
+}
+
 // ----- Presentación -----
 
 async function mostrarEstadisticas() {
@@ -182,6 +235,9 @@ async function mostrarEstadisticas() {
     ".";
 
   mostrarIndicadoresPeriodo(averias);
+
+  // Las tablas no dependen de Google Charts.
+  mostrarTablasEstadisticas(averias);
 
   try {
     await cargarGoogleCharts();
@@ -238,11 +294,101 @@ function mostrarIndicadoresPeriodo(averias) {
   });
 }
 
+// filas: arreglos de celdas; las celdas numéricas se alinean a la derecha.
+// pie (opcional): fila de totales.
+function mostrarTabla(contenedorId, encabezados, filas, pie = null) {
+  const tabla = crearElemento("table", "", "tabla-resumen");
+
+  const agregarFila = (seccion, celdas, etiquetaCelda) => {
+    const fila = document.createElement("tr");
+
+    celdas.forEach((celda, indice) => {
+      fila.appendChild(
+        crearElemento(
+          etiquetaCelda,
+          String(celda),
+          indice > 0 ? "numero" : ""
+        )
+      );
+    });
+
+    seccion.appendChild(fila);
+  };
+
+  const encabezado = document.createElement("thead");
+  agregarFila(encabezado, encabezados, "th");
+
+  const cuerpo = document.createElement("tbody");
+  filas.forEach(fila => agregarFila(cuerpo, fila, "td"));
+
+  tabla.append(encabezado, cuerpo);
+
+  if (pie) {
+    const totales = document.createElement("tfoot");
+    agregarFila(totales, pie, "td");
+    tabla.appendChild(totales);
+  }
+
+  $(contenedorId).replaceChildren(tabla);
+}
+
+function mostrarTablasEstadisticas(averias) {
+  const porTipo = calcularPorTipo(averias);
+
+  mostrarTabla(
+    "tablaTipos",
+    ["Clasificación", "Cantidad", "Porcentaje"],
+    porTipo.map(fila => [fila.tipo, fila.cantidad, `${fila.porcentaje}%`])
+  );
+
+  const porDepartamento = calcularPorDepartamento(averias);
+
+  mostrarTabla(
+    "tablaDepartamentos",
+    ["Departamento", "Hardware", "Software", "Total", "Porcentaje"],
+    porDepartamento.map(fila => [
+      fila.departamento,
+      fila.hardware,
+      fila.software,
+      fila.total,
+      `${fila.porcentaje}%`
+    ]),
+    [
+      "Total",
+      contarPorTipo(averias, "Hardware"),
+      contarPorTipo(averias, "Software"),
+      averias.length,
+      averias.length ? "100%" : "0%"
+    ]
+  );
+}
+
+function contarPorTipo(averias, tipo) {
+  return averias.filter(averia => averia.tipo === tipo).length;
+}
+
 function dibujarGraficos(averias) {
   dibujarBarras(
     "graficoEstados",
     "Estado",
     calcularPorEstado(averias)
+  );
+
+  dibujarDona(
+    "graficoTipos",
+    "Clasificación",
+    calcularPorTipo(averias).map(fila => [fila.tipo, fila.cantidad])
+  );
+
+  dibujarBarrasApiladas(
+    "graficoDepartamentos",
+    "Departamento",
+    TIPOS,
+    calcularPorDepartamento(averias).map(fila => [
+      fila.departamento,
+      fila.hardware,
+      fila.software
+    ])
   );
 }
 
@@ -303,6 +449,83 @@ function dibujarBarras(contenedorId, titulo, filas, opciones = {}) {
       alwaysOutside: true,
       textStyle: { color: "#17243b", fontSize: 12 }
     },
+    ...opciones
+  });
+}
+
+// Barras horizontales apiladas: una serie por cada elemento de "series".
+// filas: [[etiqueta, valorSerie1, valorSerie2, ...], ...]
+function dibujarBarrasApiladas(contenedorId, titulo, series, filas, opciones = {}) {
+  const contenedor = $(contenedorId);
+
+  if (!filas.some(([, ...valores]) => valores.some(valor => valor > 0))) {
+    mostrarSinDatos(contenedor);
+    return;
+  }
+
+  contenedor.replaceChildren();
+
+  const datos = google.visualization.arrayToDataTable([
+    [titulo, ...series],
+    ...filas
+  ]);
+
+  new google.visualization.BarChart(contenedor).draw(datos, {
+    ...opcionesBase(),
+    isStacked: true,
+    colors: COLORES_GRAFICOS.slice(0, series.length),
+    legend: {
+      position: "top",
+      alignment: "end",
+      textStyle: { color: "#17243b" }
+    },
+    bar: { groupWidth: "60%" },
+    chartArea: { left: 130, top: 35, right: 30, bottom: 35 },
+    hAxis: {
+      minValue: 0,
+      format: "0",
+      gridlines: { color: "#e2e8f0" },
+      minorGridlines: { count: 0 },
+      baselineColor: "#cbd5e1",
+      textStyle: { color: "#64748b" }
+    },
+    vAxis: {
+      textStyle: { color: "#17243b" }
+    },
+    ...opciones
+  });
+}
+
+// Gráfico de dona con etiquetas directas (cantidad y porcentaje).
+// filas: [[etiqueta, cantidad], ...]
+function dibujarDona(contenedorId, titulo, filas, opciones = {}) {
+  const contenedor = $(contenedorId);
+
+  if (!filas.some(([, cantidad]) => cantidad > 0)) {
+    mostrarSinDatos(contenedor);
+    return;
+  }
+
+  contenedor.replaceChildren();
+
+  const datos = google.visualization.arrayToDataTable([
+    [titulo, "Averías"],
+    ...filas
+  ]);
+
+  new google.visualization.PieChart(contenedor).draw(datos, {
+    ...opcionesBase(),
+    pieHole: 0.55,
+    colors: COLORES_GRAFICOS.slice(0, filas.length),
+    // Borde blanco para separar visualmente las porciones.
+    pieSliceBorderColor: "#ffffff",
+    pieSliceText: "none",
+    legend: {
+      position: "labeled",
+      labeledValueText: "both",
+      textStyle: { color: "#17243b" }
+    },
+    chartArea: { left: 20, top: 20, right: 20, bottom: 20 },
     ...opciones
   });
 }
