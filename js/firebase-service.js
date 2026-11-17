@@ -146,6 +146,106 @@ const FirebaseService = (() => {
       ? averia
       : null;
   }
+  
+async function guardarInicioAtencion(id, tecnicoId, cambios, registros) {
+  verificarConexion();
+
+  const averia = await obtenerAveriaTecnico(id, tecnicoId);
+
+  if (!averia || averia.estado !== "Asignado") {
+    throw new Error("La avería no está asignada o ya fue iniciada.");
+  }
+
+  const batch = firestoreAPI.writeBatch(db);
+
+  const referenciaAveria = firestoreAPI.doc(db, "averias", id);
+
+  batch.update(referenciaAveria, cambios);
+
+  for (const registro of registros) {
+    const referencia = firestoreAPI.doc(
+      db,
+      "intervenciones",
+      registro.id
+    );
+
+    batch.set(referencia, registro);
+  }
+
+  await batch.commit();
+
+  return { ...averia, ...cambios };
+}
+
+async function guardarResolucion(id, tecnicoId, cambios, registros) {
+  verificarConexion();
+
+  const averia = await obtenerAveriaTecnico(id, tecnicoId);
+
+  if (!averia || averia.estado !== "En proceso") {
+    throw new Error(
+      "La avería debe estar en proceso para marcarla como resuelta."
+    );
+  }
+
+  const batch = firestoreAPI.writeBatch(db);
+
+  const referenciaAveria = firestoreAPI.doc(db, "averias", id);
+
+  batch.update(referenciaAveria, cambios);
+
+  for (const registro of registros) {
+    const referencia = firestoreAPI.doc(
+      db,
+      "intervenciones",
+      registro.id
+    );
+
+    batch.set(referencia, registro);
+  }
+
+  await batch.commit();
+
+  return { ...averia, ...cambios };
+}
+
+
+async function guardarReapertura(id, tecnicoId, cambios, registros) {
+  verificarConexion();
+
+  const averia = await obtenerAveriaTecnico(id, tecnicoId);
+
+  if (!averia || averia.estado !== "Rechazado") {
+    throw new Error(
+      "La avería debe estar rechazada para retomar la atención."
+    );
+  }
+
+  const batch = firestoreAPI.writeBatch(db);
+
+  const referenciaAveria = firestoreAPI.doc(
+    db,
+    "averias",
+    id
+  );
+
+  batch.update(referenciaAveria, cambios);
+
+  for (const registro of registros) {
+    const referencia = firestoreAPI.doc(
+      db,
+      "intervenciones",
+      registro.id
+    );
+
+    batch.set(referencia, registro);
+  }
+
+  await batch.commit();
+
+  return { ...averia, ...cambios };
+}
+
 
   async function actualizarAveriaTecnico(id, tecnicoId, cambios) {
     const averia = await obtenerAveriaTecnico(id, tecnicoId);
@@ -165,6 +265,43 @@ const FirebaseService = (() => {
 
     return { ...averia, ...permitidos };
   }
+  
+async function guardarObservacion(id, tecnicoId, observaciones, registro) {
+  verificarConexion();
+
+  const averia = await obtenerAveriaTecnico(id, tecnicoId);
+
+  if (!averia) {
+    throw new Error("No se encontró la avería asignada.");
+  }
+
+  const batch = firestoreAPI.writeBatch(db);
+
+  // Actualizar las observaciones de la avería.
+  const referenciaAveria = firestoreAPI.doc(db, "averias", id);
+
+  batch.update(referenciaAveria, {
+    observaciones
+  });
+
+  // Guardar la intervención correspondiente.
+  const referenciaIntervencion = firestoreAPI.doc(
+    db,
+    "intervenciones",
+    registro.id
+  );
+
+  batch.set(referenciaIntervencion, registro);
+
+  // Guardar ambos cambios juntos.
+  await batch.commit();
+
+  return {
+    ...averia,
+    observaciones
+  };
+}
+
 
   function dataUrlABlob(dataUrl) {
     const [cabecera, base64] = dataUrl.split(",");
@@ -216,23 +353,28 @@ const FirebaseService = (() => {
     return listarPorAveria("mensajes", averiaId);
   }
 
-  return {
-    configurar,
-    subirImagen,
-    crearAveria,
-    obtenerAveriasUsuario,
-    obtenerAveria,
-    actualizarAveria,
-    aceptarSolucion,
-    rechazarSolucion,
-    obtenerAveriasTecnico,
-    obtenerAveriaTecnico,
-    actualizarAveriaTecnico,
-    agregarIntervencion,
-    obtenerIntervenciones,
-    agregarEvidencia,
-    obtenerEvidencias,
-    agregarMensaje,
-    obtenerMensajes
-  };
+  
+return {
+  configurar,
+  subirImagen,
+  crearAveria,
+  obtenerAveriasUsuario,
+  obtenerAveria,
+  actualizarAveria,
+  aceptarSolucion,
+  rechazarSolucion,
+  obtenerAveriasTecnico,
+  obtenerAveriaTecnico,
+  actualizarAveriaTecnico,
+  agregarIntervencion,
+  obtenerIntervenciones,
+  agregarEvidencia,
+  obtenerEvidencias,
+  agregarMensaje,
+  obtenerMensajes,
+  guardarInicioAtencion,
+  guardarResolucion,
+  guardarReapertura,
+  guardarObservacion
+};
 })();

@@ -106,104 +106,156 @@ const ServicioTecnico = (() => {
     return { averia, intervenciones, evidencias, mensajes };
   }
 
-  async function cambiarEstado(id, tecnico, nuevoEstado) {
-    const averia = await obtenerAsignada(id, tecnico);
+  
+async function cambiarEstado(id, tecnico, nuevoEstado) {
+  const averia = await obtenerAsignada(id, tecnico);
 
-    if (!estadosSiguientes(averia.estado).includes(nuevoEstado)) {
-      throw new Error(
-        `No se puede cambiar de "${averia.estado}" a "${nuevoEstado}".`
-      );
-    }
+  if (!estadosSiguientes(averia.estado).includes(nuevoEstado)) {
+    throw new Error(
+      `No se puede cambiar de "${averia.estado}" a "${nuevoEstado}".`
+    );
+  }
 
-    const ahora = new Date().toISOString();
-    const cambios = { estado: nuevoEstado };
-    const registros = [
+  const ahora = new Date().toISOString();
+  const cambios = { estado: nuevoEstado };
+
+  const registros = [
+    nuevaIntervencion(
+      averia,
+      tecnico,
+      "Cambio de estado",
+      `${averia.estado} → ${nuevoEstado}`,
+      ahora
+    )
+  ];
+
+  if (averia.estado === "Rechazado") {
+    registros.push(
       nuevaIntervencion(
         averia,
         tecnico,
-        "Cambio de estado",
-        `${averia.estado} → ${nuevoEstado}`,
+        "Rechazo del usuario",
+        `Motivo: ${averia.motivoRechazo || "No registrado"}`,
         ahora
       )
-    ];
-
-    if (averia.estado === "Rechazado") {
-      registros.push(
-        nuevaIntervencion(
-          averia,
-          tecnico,
-          "Rechazo del usuario",
-          `Motivo: ${averia.motivoRechazo || "No registrado"}`,
-          ahora
-        )
-      );
-
-      cambios.conformidad = null;
-      cambios.motivoRechazo = null;
-      cambios.fechaConformidad = null;
-      cambios.fechaResolucion = null;
-      cambios.fechaFinAtencion = null;
-    }
-
-    if (nuevoEstado === "En proceso" && !averia.fechaInicioAtencion) {
-      cambios.fechaInicioAtencion = ahora;
-
-      registros.push(
-        nuevaIntervencion(
-          averia,
-          tecnico,
-          "Inicio de atención",
-          "Se registró el inicio de la atención.",
-          ahora
-        )
-      );
-    }
-
-    if (nuevoEstado === "Resuelto") {
-      cambios.fechaResolucion = ahora;
-      cambios.fechaFinAtencion = ahora;
-
-      registros.push(
-        nuevaIntervencion(
-          averia,
-          tecnico,
-          "Fin de atención",
-          "Se marcó la avería como resuelta.",
-          ahora
-        )
-      );
-    }
-
-    for (const registro of registros) {
-      await repo.agregarIntervencion(registro);
-    }
-
-    return repo.actualizarAveriaTecnico(id, tecnico.uid, cambios);
-  }
-
-  async function agregarObservacion(id, tecnico, texto) {
-    const contenido = textoObligatorio(
-      texto,
-      "Escribí la observación antes de guardar."
     );
 
-    const averia = await obtenerAsignada(id, tecnico);
-    const ahora = new Date().toISOString();
-
-    const observaciones = [
-      ...(averia.observaciones || []),
-      { autor: tecnico.nombre, fecha: ahora, texto: contenido }
-    ];
-
-    await repo.agregarIntervencion(
-      nuevaIntervencion(averia, tecnico, "Observación", contenido, ahora)
-    );
-
-    return repo.actualizarAveriaTecnico(id, tecnico.uid, {
-      observaciones
-    });
+    cambios.conformidad = null;
+    cambios.motivoRechazo = null;
+    cambios.fechaConformidad = null;
+    cambios.fechaResolucion = null;
+    cambios.fechaFinAtencion = null;
   }
 
+  if (nuevoEstado === "En proceso" && !averia.fechaInicioAtencion) {
+    cambios.fechaInicioAtencion = ahora;
+
+    registros.push(
+      nuevaIntervencion(
+        averia,
+        tecnico,
+        "Inicio de atención",
+        "Se registró el inicio de la atención.",
+        ahora
+      )
+    );
+  }
+
+  if (nuevoEstado === "Resuelto") {
+    cambios.fechaResolucion = ahora;
+    cambios.fechaFinAtencion = ahora;
+
+    registros.push(
+      nuevaIntervencion(
+        averia,
+        tecnico,
+        "Fin de atención",
+        "Se marcó la avería como resuelta.",
+        ahora
+      )
+    );
+  }
+
+  // Guardar el inicio de atención en una sola operación de Firestore.
+  if (averia.estado === "Asignado" && nuevoEstado === "En proceso") {
+    return repo.guardarInicioAtencion(
+      id,
+      tecnico.uid,
+      cambios,
+      registros
+    );
+  }
+
+  
+if (averia.estado === "En proceso" && nuevoEstado === "Resuelto") {
+  return repo.guardarResolucion(
+    id,
+    tecnico.uid,
+    cambios,
+    registros
+  );
+}
+
+
+if (averia.estado === "Rechazado" && nuevoEstado === "En proceso") {
+  return repo.guardarReapertura(
+    id,
+    tecnico.uid,
+    cambios,
+    registros
+  );
+}
+
+
+
+  // Conservar el comportamiento de los demás cambios de estado.
+  for (const registro of registros) {
+    await repo.agregarIntervencion(registro);
+  }
+
+  return repo.actualizarAveriaTecnico(
+    id,
+    tecnico.uid,
+    cambios
+  );
+}
+
+
+async function agregarObservacion(id, tecnico, texto) {
+  const contenido = textoObligatorio(
+    texto,
+    "Escribí la observación antes de guardar."
+  );
+
+  const averia = await obtenerAsignada(id, tecnico);
+  const ahora = new Date().toISOString();
+
+  const observaciones = [
+    ...(averia.observaciones || []),
+    {
+      autor: tecnico.nombre,
+      fecha: ahora,
+      texto: contenido
+    }
+  ];
+
+  const registro = nuevaIntervencion(
+    averia,
+    tecnico,
+    "Observación",
+    contenido,
+    ahora
+  );
+
+  return repo.guardarObservacion(
+    id,
+    tecnico.uid,
+    observaciones,
+    registro
+  );
+}
+
+  
   function leerImagen(archivo) {
     return new Promise((resolve, reject) => {
       if (!archivo) {

@@ -1,16 +1,23 @@
 
 "use strict";
 
-const USUARIO_ACTUAL = {
-  uid: "usuario-demo-001",
-  nombre: "Usuario de prueba"
-};
+let USUARIO_ACTUAL = null;
 
 let averiaSeleccionada = null;
 
 const $ = id => document.getElementById(id);
 
-document.addEventListener("DOMContentLoaded", iniciar);
+document.addEventListener("DOMContentLoaded", () => {
+  window.addEventListener("usuario-autenticado", () => {
+    USUARIO_ACTUAL = window.USUARIO_FIREBASE;
+    iniciar();
+  });
+
+  if (window.USUARIO_FIREBASE) {
+    USUARIO_ACTUAL = window.USUARIO_FIREBASE;
+    iniciar();
+  }
+});
 
 function iniciar() {
   $("fecha").value = fechaLocal();
@@ -22,12 +29,20 @@ function iniciar() {
   $("btnListado").addEventListener("click", () => {
     mostrarSeccion("listado");
   });
+  
+  $("btnPerfil").addEventListener("click", () => {
+    mostrarSeccion("perfil");
+  });
+
 
   $("btnVolver").addEventListener("click", () => {
     mostrarSeccion("listado");
   });
 
   $("formAveria").addEventListener("submit", registrarAveria);
+  
+  $("formPerfil").addEventListener("submit", guardarPerfil);
+
 
   $("buscar").addEventListener("input", mostrarListado);
 
@@ -64,6 +79,62 @@ function fechaLocal() {
   return `${anio}-${mes}-${dia}`;
 }
 
+
+function cargarPerfil() {
+  const usuario = window.USUARIO_FIREBASE;
+
+  if (!usuario) {
+    console.warn("Todavía no se ha cargado el usuario.");
+    return;
+  }
+
+  $("perfilNombre").value = usuario.nombre || "";
+  $("perfilCorreo").value = usuario.correo || "";
+  $("perfilRol").value = usuario.rol || "";
+}
+
+
+async function guardarPerfil(evento) {
+  evento.preventDefault();
+
+  const usuario = window.USUARIO_FIREBASE;
+  const firebase = window.HelpDeskFirebase;
+
+  if (!usuario || !firebase) {
+    alert("No se pudo obtener la información del usuario.");
+    return;
+  }
+
+  const nuevoNombre = $("perfilNombre").value.trim();
+
+  if (!nuevoNombre || nuevoNombre.length > 100) {
+    alert("El nombre debe tener entre 1 y 100 caracteres.");
+    return;
+  }
+
+  try {
+    const referencia = firebase.firestoreAPI.doc(
+      firebase.db,
+      "usuarios",
+      usuario.uid
+    );
+
+    await firebase.firestoreAPI.updateDoc(referencia, {
+      nombre: nuevoNombre
+    });
+
+    window.USUARIO_FIREBASE.nombre = nuevoNombre;
+
+    alert("Perfil actualizado correctamente.");
+
+  } catch (error) {
+    console.error("Error al actualizar el perfil:", error);
+    alert("No se pudieron guardar los cambios.");
+  }
+}
+
+
+
 function mostrarSeccion(nombre) {
   $("seccionRegistro").classList.toggle(
     "oculto",
@@ -80,6 +151,11 @@ function mostrarSeccion(nombre) {
     nombre !== "detalle"
   );
 
+  $("seccionPerfil").classList.toggle(
+    "oculto",
+    nombre !== "perfil"
+  );
+
   $("btnRegistro").classList.toggle(
     "activo",
     nombre === "registro"
@@ -87,13 +163,23 @@ function mostrarSeccion(nombre) {
 
   $("btnListado").classList.toggle(
     "activo",
-    nombre !== "registro"
+    nombre === "listado" || nombre === "detalle"
+  );
+
+  $("btnPerfil").classList.toggle(
+    "activo",
+    nombre === "perfil"
   );
 
   if (nombre === "listado") {
     mostrarListado();
   }
+
+  if (nombre === "perfil") {
+  cargarPerfil();
+  }
 }
+
 
 function mostrarMensaje(texto, error = false) {
   const mensaje = $("mensaje");
@@ -194,9 +280,7 @@ async function registrarAveria(evento) {
   }
 
   try {
-    const imagen = await leerImagen(
-      $("imagen").files[0]
-    );
+    const imagen = null;
 
     const averia = {
       id: generarId(),
@@ -218,7 +302,7 @@ async function registrarAveria(evento) {
       fechaConformidad: null
     };
 
-    RepositorioAverias.crear(averia);
+   await FirebaseService.crearAveria(averia);
 
     $("formAveria").reset();
     $("fecha").value = fechaLocal();
@@ -280,7 +364,7 @@ function claseEstado(estado) {
     estado.toLowerCase().replaceAll(" ", "-");
 }
 
-function mostrarListado() {
+async function mostrarListado() {
   const lista = $("listaAverias");
   lista.replaceChildren();
 
@@ -289,9 +373,11 @@ function mostrarListado() {
 
   const filtro = $("filtroEstado").value;
 
-  const averias = RepositorioAverias
-    .obtenerPorUsuario(USUARIO_ACTUAL.uid)
-    .filter(averia =>
+  const averiasUsuario =
+  await FirebaseService.obtenerAveriasUsuario(USUARIO_ACTUAL.uid);
+
+const averias = averiasUsuario
+  .filter(averia =>
       (!filtro || averia.estado === filtro) &&
       (
         averia.titulo.toLowerCase().includes(busqueda) ||
@@ -399,228 +485,220 @@ function agregarDato(
   contenedor.appendChild(dato);
 }
 
-function verDetalle(id) {
-  const averia = RepositorioAverias.obtenerPorId(
-    id,
-    USUARIO_ACTUAL.uid
-  );
 
-  if (!averia) {
-    mostrarMensaje(
-      "No se encontró la avería.",
-      true
-    );
-    return;
-  }
+async function verDetalle(id) {
+  try {
+    const averia = await FirebaseService.obtenerAveria(id);
 
-  averiaSeleccionada = id;
+    if (!averia || averia.usuarioId !== USUARIO_ACTUAL.uid) {
+      mostrarMensaje(
+        "No se encontró la avería.",
+        true
+      );
+      return;
+    }
 
-  const contenido = $("contenidoDetalle");
-  contenido.replaceChildren();
+    averiaSeleccionada = id;
 
-  contenido.appendChild(
-    crearElemento("h2", averia.titulo)
-  );
+    const contenido = $("contenidoDetalle");
+    contenido.replaceChildren();
 
-  contenido.appendChild(
-    crearElemento(
-      "span",
-      averia.estado,
-      `estado ${claseEstado(averia.estado)}`
-    )
-  );
-
-  const datos = crearElemento(
-    "div",
-    "",
-    "detalle-datos"
-  );
-
-  agregarDato(
-    datos,
-    "Número de reporte",
-    averia.id
-  );
-
-  agregarDato(
-    datos,
-    "Departamento",
-    averia.departamento
-  );
-
-  agregarDato(
-    datos,
-    "Tipo de avería",
-    averia.tipo
-  );
-
-  agregarDato(
-    datos,
-    "Fecha",
-    textoFecha(averia.fechaReporte)
-  );
-
-  agregarDato(
-    datos,
-    "Técnico asignado",
-    averia.tecnicoNombre || "Sin asignar"
-  );
-
-  agregarDato(
-    datos,
-    "Fecha de resolución",
-    textoFecha(averia.fechaResolucion)
-  );
-
-  contenido.appendChild(datos);
-
-  contenido.appendChild(
-    crearElemento("h3", "Descripción")
-  );
-
-  contenido.appendChild(
-    crearElemento("p", averia.descripcion)
-  );
-
-  if (averia.imagen) {
     contenido.appendChild(
-      crearElemento("h3", "Fotografía")
+      crearElemento("h2", averia.titulo)
     );
 
-    const imagen = document.createElement("img");
-
-    imagen.src = averia.imagen;
-    imagen.alt = "Fotografía adjunta a la avería";
-    imagen.className = "foto-averia";
-
-    contenido.appendChild(imagen);
-  }
-
-  contenido.appendChild(
-    crearElemento(
-      "h3",
-      "Observaciones del técnico"
-    )
-  );
-
-  const observaciones = averia.observaciones || [];
-
-  if (observaciones.length === 0) {
     contenido.appendChild(
       crearElemento(
-        "p",
-        "Todavía no hay observaciones."
+        "span",
+        averia.estado,
+        `estado ${claseEstado(averia.estado)}`
       )
     );
-  } else {
-    observaciones.forEach(observacion => {
-      const bloque = crearElemento(
-        "div",
-        "",
-        "dato"
+
+    const datos = crearElemento(
+      "div",
+      "",
+      "detalle-datos"
+    );
+
+    agregarDato(
+      datos,
+      "Número de reporte",
+      averia.id
+    );
+
+    agregarDato(
+      datos,
+      "Departamento",
+      averia.departamento
+    );
+
+    agregarDato(
+      datos,
+      "Tipo de avería",
+      averia.tipo
+    );
+
+    agregarDato(
+      datos,
+      "Fecha",
+      textoFecha(averia.fechaReporte)
+    );
+
+    agregarDato(
+      datos,
+      "Técnico asignado",
+      averia.tecnicoNombre || "Sin asignar"
+    );
+
+    agregarDato(
+      datos,
+      "Fecha de resolución",
+      textoFecha(averia.fechaResolucion)
+    );
+
+    contenido.appendChild(datos);
+
+    contenido.appendChild(
+      crearElemento("h3", "Descripción")
+    );
+
+    contenido.appendChild(
+      crearElemento("p", averia.descripcion)
+    );
+
+    if (averia.imagen) {
+      contenido.appendChild(
+        crearElemento("h3", "Fotografía")
       );
 
-      bloque.appendChild(
-        crearElemento(
-          "strong",
-          `${observacion.autor} · ${textoFecha(observacion.fecha)}`
-        )
-      );
+      const imagen = document.createElement("img");
 
-      bloque.appendChild(
-        crearElemento(
-          "p",
-          observacion.texto
-        )
-      );
+      imagen.src = averia.imagen;
+      imagen.alt = "Fotografía adjunta a la avería";
+      imagen.className = "foto-averia";
 
-      contenido.appendChild(bloque);
-    });
-  }
+      contenido.appendChild(imagen);
+    }
 
-  if (averia.conformidad) {
     contenido.appendChild(
       crearElemento(
         "h3",
-        "Respuesta del usuario"
+        "Observaciones del técnico"
       )
     );
 
-    contenido.appendChild(
-      crearElemento(
-        "p",
-        averia.conformidad === "Aceptada"
-          ? "Solución aceptada."
-          : `Solución rechazada: ${averia.motivoRechazo}`
-      )
+    const observaciones = averia.observaciones || [];
+
+    if (observaciones.length === 0) {
+      contenido.appendChild(
+        crearElemento(
+          "p",
+          "Todavía no hay observaciones."
+        )
+      );
+    } else {
+      observaciones.forEach(observacion => {
+        const bloque = crearElemento(
+          "div",
+          "",
+          "dato"
+        );
+
+        bloque.appendChild(
+          crearElemento(
+            "strong",
+            `${observacion.autor} · ${textoFecha(observacion.fecha)}`
+          )
+        );
+
+        bloque.appendChild(
+          crearElemento(
+            "p",
+            observacion.texto
+          )
+        );
+
+        contenido.appendChild(bloque);
+      });
+    }
+
+    if (averia.conformidad) {
+      contenido.appendChild(
+        crearElemento(
+          "h3",
+          "Respuesta del usuario"
+        )
+      );
+
+      contenido.appendChild(
+        crearElemento(
+          "p",
+          averia.conformidad === "Aceptada"
+            ? "Solución aceptada."
+            : `Solución rechazada: ${averia.motivoRechazo}`
+        )
+      );
+    }
+
+    $("accionesSolucion").classList.toggle(
+      "oculto",
+      averia.estado !== "Resuelto" ||
+      averia.conformidad != null
     );
-  }
 
-  $("accionesSolucion").classList.toggle(
-    "oculto",
-    averia.estado !== "Resuelto" ||
-    averia.conformidad !== null
-  );
+    $("formRechazo").classList.add("oculto");
+    $("formRechazo").reset();
 
-  $("formRechazo").classList.add("oculto");
-  $("formRechazo").reset();
+    mostrarSeccion("detalle");
 
-  mostrarSeccion("detalle");
-}
-
-function aceptarSolucion() {
-  const averia = RepositorioAverias.obtenerPorId(
-    averiaSeleccionada,
-    USUARIO_ACTUAL.uid
-  );
-
-  if (
-    !averia ||
-    averia.estado !== "Resuelto" ||
-    averia.conformidad
-  ) {
+  } catch (error) {
     mostrarMensaje(
-      "Esta avería no permite confirmar la solución.",
+      "No se pudo cargar la avería: " + error.message,
       true
     );
-    return;
   }
+}
 
-  if (
-    !confirm(
-      "¿Confirmás que el problema fue solucionado?"
-    )
-  ) {
-    return;
-  }
 
+async function aceptarSolucion() {
   try {
-    RepositorioAverias.actualizar(
-      averia.id,
-      USUARIO_ACTUAL.uid,
-      {
-        conformidad: "Aceptada",
-        motivoRechazo: null,
-        fechaConformidad: new Date().toISOString(),
-        estado: "Cerrado"
-      }
+    const averia = await FirebaseService.obtenerAveria(
+      averiaSeleccionada
     );
 
-    verDetalle(averia.id);
+    if (
+      !averia ||
+      averia.usuarioId !== USUARIO_ACTUAL.uid ||
+      averia.estado !== "Resuelto" ||
+      averia.conformidad
+    ) {
+      mostrarMensaje(
+        "Esta avería no permite confirmar la solución.",
+        true
+      );
+      return;
+    }
 
-    mostrarMensaje(
-      "Solución aceptada correctamente."
-    );
+    if (!confirm("¿Confirmás que el problema fue solucionado?")) {
+      return;
+    }
+
+    await FirebaseService.aceptarSolucion(averia.id);
+
+    await verDetalle(averia.id);
+
+    mostrarMensaje("Solución aceptada correctamente.");
+
   } catch (error) {
     mostrarMensaje(error.message, true);
   }
 }
 
-function rechazarSolucion(evento) {
+async function rechazarSolucion(evento) {
   evento.preventDefault();
 
-  const motivo = $("motivoRechazo")
-    .value.trim();
+  const motivo = $("motivoRechazo").value.trim();
 
   if (!motivo) {
     mostrarMensaje(
@@ -630,40 +708,33 @@ function rechazarSolucion(evento) {
     return;
   }
 
-  const averia = RepositorioAverias.obtenerPorId(
-    averiaSeleccionada,
-    USUARIO_ACTUAL.uid
-  );
-
-  if (
-    !averia ||
-    averia.estado !== "Resuelto" ||
-    averia.conformidad
-  ) {
-    mostrarMensaje(
-      "No se puede rechazar esta solución.",
-      true
-    );
-    return;
-  }
-
   try {
-    RepositorioAverias.actualizar(
+    const averia = await FirebaseService.obtenerAveria(
+      averiaSeleccionada
+    );
+
+    if (
+      !averia ||
+      averia.usuarioId !== USUARIO_ACTUAL.uid ||
+      averia.estado !== "Resuelto" ||
+      averia.conformidad
+    ) {
+      mostrarMensaje(
+        "No se puede rechazar esta solución.",
+        true
+      );
+      return;
+    }
+
+    await FirebaseService.rechazarSolucion(
       averia.id,
-      USUARIO_ACTUAL.uid,
-      {
-        conformidad: "Rechazada",
-        motivoRechazo: motivo,
-        fechaConformidad: new Date().toISOString(),
-        estado: "Rechazado"
-      }
+      motivo
     );
 
-    verDetalle(averia.id);
+    await verDetalle(averia.id);
 
-    mostrarMensaje(
-      "Rechazo registrado correctamente."
-    );
+    mostrarMensaje("Rechazo registrado correctamente.");
+
   } catch (error) {
     mostrarMensaje(error.message, true);
   }
