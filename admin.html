@@ -37,6 +37,14 @@
       >
         Resumen
       </button>
+
+      <button type="button" data-seccion="averias">
+        Todas las averías
+      </button>
+
+      <button type="button" data-seccion="pendientes">
+        Pendientes
+      </button>
     </nav>
 
     <section id="seccionResumen" data-seccion="resumen">
@@ -48,6 +56,70 @@
       </div>
 
       <div id="indicadores" class="indicadores"></div>
+    </section>
+
+    <section
+      id="seccionAverias"
+      class="oculto"
+      data-seccion="averias"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Todas las averías</h2>
+          <p id="conteoAverias"></p>
+        </div>
+      </div>
+
+      <div class="tarjeta filtros">
+        <input
+          id="buscar"
+          type="search"
+          placeholder="Buscar por título o número"
+        >
+
+        <select id="filtroEstado">
+          <option value="">Todos los estados</option>
+          <option value="Pendiente">Pendiente</option>
+          <option value="Asignado">Asignado</option>
+          <option value="En proceso">En proceso</option>
+          <option value="Resuelto">Resuelto</option>
+          <option value="Cerrado">Cerrado</option>
+          <option value="Rechazado">Rechazado</option>
+        </select>
+      </div>
+
+      <div id="listaAverias"></div>
+    </section>
+
+    <section
+      id="seccionPendientes"
+      class="oculto"
+      data-seccion="pendientes"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Averías pendientes</h2>
+          <p id="conteoPendientes"></p>
+        </div>
+      </div>
+
+      <div id="listaPendientes"></div>
+    </section>
+
+    <section
+      id="seccionDetalle"
+      class="tarjeta oculto"
+      data-seccion="detalle"
+    >
+      <button
+        id="btnVolver"
+        class="boton secundario"
+        type="button"
+      >
+        Volver al listado
+      </button>
+
+      <div id="contenidoDetalle"></div>
     </section>
 
     <div id="mensaje" role="status" aria-live="polite"></div>

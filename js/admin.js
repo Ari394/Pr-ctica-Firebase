@@ -6,6 +6,9 @@ const ADMIN_ACTUAL = {
   nombre: "Administrador de prueba"
 };
 
+// Sección desde la que se abrió el detalle, para poder volver.
+let seccionOrigen = "averias";
+
 const $ = id => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", iniciar);
@@ -18,6 +21,17 @@ function iniciar() {
         mostrarSeccion(boton.dataset.seccion);
       });
     });
+
+  $("buscar").addEventListener("input", mostrarAverias);
+
+  $("filtroEstado").addEventListener(
+    "change",
+    mostrarAverias
+  );
+
+  $("btnVolver").addEventListener("click", () => {
+    mostrarSeccion(seccionOrigen);
+  });
 
   mostrarSeccion("resumen");
 }
@@ -32,17 +46,30 @@ function mostrarSeccion(nombre) {
       );
     });
 
-  document
-    .querySelectorAll(".navegacion button[data-seccion]")
-    .forEach(boton => {
-      boton.classList.toggle(
-        "activo",
-        boton.dataset.seccion === nombre
-      );
-    });
+  // El detalle mantiene activo el botón de la sección de origen.
+  if (nombre !== "detalle") {
+    seccionOrigen = nombre;
+
+    document
+      .querySelectorAll(".navegacion button[data-seccion]")
+      .forEach(boton => {
+        boton.classList.toggle(
+          "activo",
+          boton.dataset.seccion === nombre
+        );
+      });
+  }
 
   if (nombre === "resumen") {
     mostrarResumen();
+  }
+
+  if (nombre === "averias") {
+    mostrarAverias();
+  }
+
+  if (nombre === "pendientes") {
+    mostrarPendientes();
   }
 }
 
@@ -74,6 +101,325 @@ function crearElemento(
   if (clase) elemento.className = clase;
 
   return elemento;
+}
+
+function textoFecha(valor) {
+  if (!valor) {
+    return "No registrada";
+  }
+
+  const fecha = new Date(
+    valor.length === 10
+      ? `${valor}T12:00:00`
+      : valor
+  );
+
+  return Number.isNaN(fecha.getTime())
+    ? valor
+    : fecha.toLocaleString("es-CR", {
+        dateStyle: "medium",
+        ...(valor.length === 10
+          ? {}
+          : { timeStyle: "short" })
+      });
+}
+
+function claseEstado(estado) {
+  return "estado-" +
+    estado.toLowerCase().replaceAll(" ", "-");
+}
+
+function textoCantidad(cantidad, singular, plural) {
+  return `${cantidad} ${cantidad === 1 ? singular : plural}`;
+}
+
+function diasDesde(valor) {
+  const milisegundos = Date.now() - new Date(valor).getTime();
+
+  return Math.max(
+    0,
+    Math.floor(milisegundos / 86400000)
+  );
+}
+
+function ordenarPorFecha(averias, ascendente = false) {
+  return [...averias].sort((a, b) => {
+    const diferencia =
+      new Date(a.fechaCreacion) -
+      new Date(b.fechaCreacion);
+
+    return ascendente ? diferencia : -diferencia;
+  });
+}
+
+function mostrarVacio(lista, texto) {
+  lista.appendChild(
+    crearElemento("p", texto, "vacio")
+  );
+}
+
+function crearTarjetaAveria(averia, detalleExtra = "") {
+  const tarjeta = crearElemento(
+    "article",
+    "",
+    "reporte"
+  );
+
+  const superior = crearElemento(
+    "div",
+    "",
+    "reporte-superior"
+  );
+
+  const datos = document.createElement("div");
+
+  datos.append(
+    crearElemento("h3", averia.titulo),
+    crearElemento(
+      "p",
+      `${averia.tipo} · ${averia.departamento}`
+    ),
+    crearElemento(
+      "p",
+      `Fecha: ${textoFecha(averia.fechaReporte)}`
+    ),
+    crearElemento(
+      "p",
+      `Técnico: ${averia.tecnicoNombre || "Sin asignar"}`
+    )
+  );
+
+  if (detalleExtra) {
+    datos.appendChild(
+      crearElemento("p", detalleExtra)
+    );
+  }
+
+  const estado = crearElemento(
+    "span",
+    averia.estado,
+    `estado ${claseEstado(averia.estado)}`
+  );
+
+  superior.append(datos, estado);
+
+  const boton = crearElemento(
+    "button",
+    "Ver detalles",
+    "boton principal"
+  );
+
+  boton.type = "button";
+
+  boton.addEventListener(
+    "click",
+    () => verDetalle(averia.id)
+  );
+
+  tarjeta.append(superior, boton);
+
+  return tarjeta;
+}
+
+function mostrarAverias() {
+  const lista = $("listaAverias");
+  lista.replaceChildren();
+
+  const busqueda = $("buscar")
+    .value.trim().toLowerCase();
+
+  const filtro = $("filtroEstado").value;
+
+  const todas = RepositorioAverias.obtenerTodas();
+
+  const averias = ordenarPorFecha(
+    todas.filter(averia =>
+      (!filtro || averia.estado === filtro) &&
+      (
+        averia.titulo.toLowerCase().includes(busqueda) ||
+        averia.id.toLowerCase().includes(busqueda)
+      )
+    )
+  );
+
+  $("conteoAverias").textContent =
+    `Mostrando ${averias.length} de ` +
+    textoCantidad(todas.length, "avería registrada", "averías registradas") +
+    ".";
+
+  if (!averias.length) {
+    mostrarVacio(
+      lista,
+      todas.length
+        ? "No hay averías que coincidan con la búsqueda."
+        : "Todavía no se han registrado averías."
+    );
+    return;
+  }
+
+  averias.forEach(averia => {
+    lista.appendChild(crearTarjetaAveria(averia));
+  });
+}
+
+function mostrarPendientes() {
+  const lista = $("listaPendientes");
+  lista.replaceChildren();
+
+  // Las más antiguas primero: son las que deben atenderse antes.
+  const pendientes = ordenarPorFecha(
+    RepositorioAverias
+      .obtenerTodas()
+      .filter(averia => averia.estado === "Pendiente"),
+    true
+  );
+
+  $("conteoPendientes").textContent =
+    textoCantidad(
+      pendientes.length,
+      "avería espera",
+      "averías esperan"
+    ) +
+    " la asignación de un técnico.";
+
+  if (!pendientes.length) {
+    mostrarVacio(
+      lista,
+      "No hay averías pendientes de asignar."
+    );
+    return;
+  }
+
+  pendientes.forEach(averia => {
+    const dias = diasDesde(averia.fechaCreacion);
+
+    lista.appendChild(
+      crearTarjetaAveria(
+        averia,
+        dias === 0
+          ? "Registrada hoy"
+          : `En espera hace ${textoCantidad(dias, "día", "días")}`
+      )
+    );
+  });
+}
+
+function agregarDato(
+  contenedor,
+  titulo,
+  valor
+) {
+  const dato = crearElemento(
+    "div",
+    "",
+    "dato"
+  );
+
+  dato.append(
+    crearElemento("strong", titulo),
+    crearElemento("span", valor ?? "No disponible")
+  );
+
+  contenedor.appendChild(dato);
+}
+
+function verDetalle(id) {
+  const averia = RepositorioAverias.obtenerPorIdComoAdmin(id);
+
+  if (!averia) {
+    mostrarMensaje(
+      "No se encontró la avería.",
+      true
+    );
+    return;
+  }
+
+  const contenido = $("contenidoDetalle");
+  contenido.replaceChildren();
+
+  contenido.append(
+    crearElemento("h2", averia.titulo),
+    crearElemento(
+      "span",
+      averia.estado,
+      `estado ${claseEstado(averia.estado)}`
+    )
+  );
+
+  const datos = crearElemento(
+    "div",
+    "",
+    "detalle-datos"
+  );
+
+  agregarDato(datos, "Número de reporte", averia.id);
+  agregarDato(datos, "Usuario", averia.usuarioId);
+  agregarDato(datos, "Departamento", averia.departamento);
+  agregarDato(datos, "Tipo de avería", averia.tipo);
+  agregarDato(datos, "Fecha del reporte", textoFecha(averia.fechaReporte));
+  agregarDato(datos, "Fecha de registro", textoFecha(averia.fechaCreacion));
+  agregarDato(datos, "Técnico asignado", averia.tecnicoNombre || "Sin asignar");
+  agregarDato(datos, "Fecha de resolución", textoFecha(averia.fechaResolucion));
+
+  contenido.appendChild(datos);
+
+  contenido.append(
+    crearElemento("h3", "Descripción"),
+    crearElemento("p", averia.descripcion)
+  );
+
+  if (averia.imagen) {
+    const imagen = document.createElement("img");
+
+    imagen.src = averia.imagen;
+    imagen.alt = "Fotografía adjunta a la avería";
+    imagen.className = "foto-averia";
+
+    contenido.append(
+      crearElemento("h3", "Fotografía"),
+      imagen
+    );
+  }
+
+  contenido.appendChild(
+    crearElemento("h3", "Observaciones del técnico")
+  );
+
+  const observaciones = averia.observaciones || [];
+
+  if (observaciones.length === 0) {
+    contenido.appendChild(
+      crearElemento("p", "Todavía no hay observaciones.")
+    );
+  } else {
+    observaciones.forEach(observacion => {
+      const bloque = crearElemento("div", "", "dato");
+
+      bloque.append(
+        crearElemento(
+          "strong",
+          `${observacion.autor} · ${textoFecha(observacion.fecha)}`
+        ),
+        crearElemento("p", observacion.texto)
+      );
+
+      contenido.appendChild(bloque);
+    });
+  }
+
+  if (averia.conformidad) {
+    contenido.append(
+      crearElemento("h3", "Respuesta del usuario"),
+      crearElemento(
+        "p",
+        averia.conformidad === "Aceptada"
+          ? `Solución aceptada el ${textoFecha(averia.fechaConformidad)}.`
+          : `Solución rechazada: ${averia.motivoRechazo}`
+      )
+    );
+  }
+
+  mostrarSeccion("detalle");
 }
 
 function contarPorEstado(averias, ...estados) {

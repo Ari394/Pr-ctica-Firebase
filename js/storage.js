@@ -80,6 +80,13 @@ const RepositorioAverias = (() => {
   }
 
   // Uso exclusivo del administrador: no filtra por usuario.
+  function obtenerPorIdComoAdmin(id) {
+    return obtenerTodas().find(
+      averia => averia.id === id
+    ) || null;
+  }
+
+  // Uso exclusivo del administrador: no filtra por usuario.
   function actualizarComoAdmin(id, cambios) {
     const averias = obtenerTodas();
 
@@ -105,6 +112,7 @@ const RepositorioAverias = (() => {
 
   return {
     obtenerTodas,
+    obtenerPorIdComoAdmin,
     actualizarComoAdmin,
     crear,
     obtenerPorUsuario,
