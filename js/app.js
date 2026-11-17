@@ -1,7 +1,6 @@
 
 "use strict";
 
-// Usuario temporal hasta integrar Firebase Authentication.
 const USUARIO_ACTUAL = {
   uid: "usuario-demo-001",
   nombre: "Usuario de prueba"
