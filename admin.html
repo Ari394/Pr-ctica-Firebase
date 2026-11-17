@@ -7,7 +7,9 @@
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/storage.js" defer></script>
   <script src="js/storage-tecnicos.js" defer></script>
+  <script src="js/storage-lecturas-chat.js" defer></script>
   <script src="js/admin.js" defer></script>
+  <script src="js/chat-admin.js" defer></script>
 </head>
 <body>
   <header class="encabezado">
@@ -48,6 +50,15 @@
 
       <button type="button" data-seccion="tecnicos">
         Técnicos
+      </button>
+
+      <button type="button" data-seccion="chats">
+        Chats
+        <span
+          id="contadorChats"
+          class="contador oculto"
+          aria-label="Mensajes sin leer"
+        ></span>
       </button>
     </nav>
 
@@ -183,6 +194,66 @@
       </div>
 
       <div id="listaTecnicos"></div>
+    </section>
+
+    <section
+      id="seccionChats"
+      class="oculto"
+      data-seccion="chats"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Chats con técnicos</h2>
+          <p id="conteoChats"></p>
+        </div>
+      </div>
+
+      <div class="tarjeta chat-panel">
+        <div
+          id="listaConversaciones"
+          class="chat-lista"
+          aria-label="Conversaciones"
+        ></div>
+
+        <div class="chat-activo">
+          <p id="chatVacio" class="vacio">
+            Seleccioná una conversación para ver los mensajes.
+          </p>
+
+          <div id="chatContenido" class="chat-contenido oculto">
+            <div class="chat-encabezado">
+              <h3 id="chatTitulo"></h3>
+              <p id="chatSubtitulo"></p>
+            </div>
+
+            <div
+              id="chatMensajes"
+              class="chat-mensajes"
+              aria-live="polite"
+            ></div>
+
+            <p id="chatSoloLectura" class="chat-solo-lectura oculto">
+              La avería no tiene un técnico asignado. Esta
+              conversación solo se puede consultar.
+            </p>
+
+            <form id="formChat" class="chat-formulario">
+              <label for="textoChat" class="oculto">Mensaje</label>
+              <textarea
+                id="textoChat"
+                rows="2"
+                maxlength="1000"
+                placeholder="Escribí un mensaje (Enter para enviar)"
+                required
+              ></textarea>
+
+              <button class="boton principal" type="submit">
+                Enviar
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section

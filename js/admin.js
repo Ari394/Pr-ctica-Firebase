@@ -113,6 +113,10 @@ function mostrarSeccion(nombre) {
   if (nombre === "tecnicos") {
     mostrarTecnicos();
   }
+
+  if (nombre === "chats") {
+    mostrarChats();
+  }
 }
 
 function mostrarMensaje(texto, error = false) {
@@ -479,6 +483,22 @@ function verDetalle(id) {
   agregarDato(datos, "Fecha de resolución", textoFecha(averia.fechaResolucion));
 
   contenido.appendChild(datos);
+
+  if (averia.tecnicoId) {
+    const botonChat = crearElemento(
+      "button",
+      `Chat con ${averia.tecnicoNombre}`,
+      "boton secundario"
+    );
+
+    botonChat.type = "button";
+
+    botonChat.addEventListener("click", () => {
+      abrirConversacion(averia.id);
+    });
+
+    contenido.appendChild(botonChat);
+  }
 
   contenido.append(
     crearElemento("h3", "Descripción"),

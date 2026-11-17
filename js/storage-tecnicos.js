@@ -11,6 +11,13 @@ const RepositorioTecnicos = (() => {
   // averías activas asignadas a cada técnico.
   const TECNICOS_INICIALES = [
     {
+      // Mismo usuario que TECNICO_ACTUAL en tecnico.js.
+      id: "tecnico-demo-001",
+      nombre: "Técnico de prueba",
+      correo: "tecnico.prueba@helpdesk.local",
+      especialidad: "Hardware"
+    },
+    {
       id: "tecnico-001",
       nombre: "Carlos Méndez",
       correo: "carlos.mendez@helpdesk.local",
@@ -47,7 +54,22 @@ const RepositorioTecnicos = (() => {
 
       const datos = JSON.parse(guardados);
 
-      return Array.isArray(datos) ? datos : [];
+      if (!Array.isArray(datos)) {
+        return [];
+      }
+
+      // Agrega los técnicos iniciales que se sumaron después
+      // de que el navegador guardara la lista.
+      const faltantes = TECNICOS_INICIALES.filter(
+        inicial => !datos.some(tecnico => tecnico.id === inicial.id)
+      );
+
+      if (faltantes.length) {
+        datos.push(...faltantes);
+        guardarTodos(datos);
+      }
+
+      return datos;
     } catch (error) {
       console.error("Error al leer técnicos:", error);
       return [];
