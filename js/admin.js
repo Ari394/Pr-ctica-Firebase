@@ -20,6 +20,15 @@ const ESTADOS_ASIGNABLES = ["Pendiente", "Asignado", "Rechazado"];
 // Valor del filtro de técnico para las averías sin asignar.
 const SIN_TECNICO = "sin-asignar";
 
+// El administrador elige el tipo de servicio al asignar la avería.
+const TIPOS_SERVICIO = [
+  "Reparación",
+  "Instalación",
+  "Mantenimiento",
+  "Configuración",
+  "Otro"
+];
+
 const $ = id => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", iniciar);
@@ -34,6 +43,7 @@ function iniciar() {
     });
 
   cargarOpcionesTecnicos();
+  cargarOpcionesServicio();
 
   $("buscar").addEventListener("input", mostrarAverias);
 
@@ -294,6 +304,20 @@ function cargarOpcionesTecnicos() {
   });
 }
 
+function cargarOpcionesServicio() {
+  const selector = $("tipoServicio");
+
+  const vacia = crearElemento("option", "Seleccionar");
+  vacia.value = "";
+  selector.appendChild(vacia);
+
+  TIPOS_SERVICIO.forEach(tipo => {
+    const opcion = crearElemento("option", tipo);
+    opcion.value = tipo;
+    selector.appendChild(opcion);
+  });
+}
+
 function leerFiltros() {
   return {
     busqueda: $("buscar").value.trim().toLowerCase(),
@@ -480,6 +504,7 @@ function verDetalle(id) {
   agregarDato(datos, "Usuario", averia.usuarioId);
   agregarDato(datos, "Departamento", averia.departamento);
   agregarDato(datos, "Tipo de avería", averia.tipo);
+  agregarDato(datos, "Tipo de servicio", averia.tipoServicio || "Sin definir");
   agregarDato(datos, "Fecha del reporte", textoFecha(averia.fechaReporte));
   agregarDato(datos, "Fecha de registro", textoFecha(averia.fechaCreacion));
   agregarDato(datos, "Técnico asignado", averia.tecnicoNombre || "Sin asignar");
@@ -714,6 +739,9 @@ function prepararAsignacion(averia) {
     ? "Reasignar técnico"
     : "Asignar técnico";
 
+  // Al reasignar se conserva el tipo de servicio elegido antes.
+  $("tipoServicio").value = averia.tipoServicio || "";
+
   // Primero los disponibles con la especialidad de la avería,
   // luego el resto según su carga de trabajo.
   const tecnicos = tecnicosConCarga()
@@ -772,6 +800,13 @@ function asignarTecnico(evento) {
     return;
   }
 
+  const tipoServicio = $("tipoServicio").value;
+
+  if (!TIPOS_SERVICIO.includes(tipoServicio)) {
+    mostrarMensaje("Seleccioná el tipo de servicio.", true);
+    return;
+  }
+
   const ahora = new Date().toISOString();
 
   const asignacion = {
@@ -788,6 +823,7 @@ function asignarTecnico(evento) {
   const cambios = {
     tecnicoId: tecnico.id,
     tecnicoNombre: tecnico.nombre,
+    tipoServicio,
     estado: "Asignado",
     // Se conserva la primera asignación para medir el tiempo de respuesta.
     fechaAsignacion: averia.fechaAsignacion || ahora,

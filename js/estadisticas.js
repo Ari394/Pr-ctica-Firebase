@@ -341,6 +341,31 @@ function elegirUnidadTiempo(maximo) {
   return { nombre: "Días", milisegundos: 86400000 };
 }
 
+// Etiqueta para las averías que todavía no tienen tipo de servicio
+// (las pendientes y las registradas antes de existir este campo).
+const SIN_SERVICIO = "Sin definir";
+
+function calcularPorTipoServicio(averias) {
+  return [
+    ...valoresPresentes(TIPOS_SERVICIO, averias, "tipoServicio"),
+    SIN_SERVICIO
+  ].map(servicio => {
+    const delServicio = averias.filter(averia =>
+      servicio === SIN_SERVICIO
+        ? !averia.tipoServicio
+        : averia.tipoServicio === servicio
+    );
+
+    return {
+      servicio,
+      cantidad: delServicio.length,
+      porcentaje: porcentaje(delServicio.length, averias.length),
+      resueltas: contarPorEstado(delServicio, "Resuelto", "Cerrado"),
+      duracion: calcularTiemposPromedio(delServicio).duracion
+    };
+  });
+}
+
 function calcularPorDepartamento(averias) {
   return valoresPresentes(DEPARTAMENTOS, averias, "departamento").map(departamento => {
     const delDepartamento = averias.filter(
@@ -568,6 +593,25 @@ function mostrarTablasEstadisticas(averias) {
       textoDuracion(tiemposGenerales.duracion)
     ]
   );
+
+  mostrarTabla(
+    "tablaServicios",
+    ["Tipo de servicio", "Cantidad", "Porcentaje", "Resueltas", "Duración promedio"],
+    calcularPorTipoServicio(averias).map(fila => [
+      fila.servicio,
+      fila.cantidad,
+      `${fila.porcentaje}%`,
+      fila.resueltas,
+      textoDuracion(fila.duracion)
+    ]),
+    [
+      "Total",
+      averias.length,
+      averias.length ? "100%" : "0%",
+      contarPorEstado(averias, "Resuelto", "Cerrado"),
+      textoDuracion(calcularTiemposPromedio(averias).duracion)
+    ]
+  );
 }
 
 function contarPorTipo(averias, tipo) {
@@ -613,6 +657,15 @@ function dibujarGraficos(averias) {
   );
 
   dibujarTiemposPorTecnico(porTecnico);
+
+  dibujarBarras(
+    "graficoServicios",
+    "Tipo de servicio",
+    calcularPorTipoServicio(averias).map(fila => [
+      fila.servicio,
+      fila.cantidad
+    ])
+  );
 }
 
 // Barras agrupadas (una al lado de la otra, en la misma unidad):

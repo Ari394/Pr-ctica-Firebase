@@ -340,6 +340,12 @@
           <h3>Tiempos promedio por técnico</h3>
           <div id="graficoTiempos" class="grafico"></div>
         </article>
+
+        <article class="tarjeta grafico-tarjeta grafico-ancho">
+          <h3>Averías por tipo de servicio</h3>
+          <div id="graficoServicios" class="grafico"></div>
+          <div id="tablaServicios" class="tabla-contenedor"></div>
+        </article>
       </div>
     </section>
 
@@ -368,6 +374,11 @@
             Los técnicos disponibles con la especialidad
             de la avería aparecen primero.
           </small>
+        </div>
+
+        <div class="campo">
+          <label for="tipoServicio">Tipo de servicio *</label>
+          <select id="tipoServicio" required></select>
         </div>
 
         <button class="boton principal" type="submit">
