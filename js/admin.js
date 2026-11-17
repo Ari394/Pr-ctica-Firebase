@@ -117,6 +117,10 @@ function mostrarSeccion(nombre) {
   if (nombre === "chats") {
     mostrarChats();
   }
+
+  if (nombre === "estadisticas") {
+    mostrarEstadisticas();
+  }
 }
 
 function mostrarMensaje(texto, error = false) {

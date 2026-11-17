@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HelpDesk | Administración</title>
   <link rel="stylesheet" href="css/styles.css">
+  <script src="https://www.gstatic.com/charts/loader.js" defer></script>
   <script src="js/storage.js" defer></script>
   <script src="js/storage-tecnicos.js" defer></script>
   <script src="js/storage-lecturas-chat.js" defer></script>
   <script src="js/admin.js" defer></script>
   <script src="js/chat-admin.js" defer></script>
+  <script src="js/estadisticas.js" defer></script>
 </head>
 <body>
   <header class="encabezado">
@@ -59,6 +61,10 @@
           class="contador oculto"
           aria-label="Mensajes sin leer"
         ></span>
+      </button>
+
+      <button type="button" data-seccion="estadisticas">
+        Estadísticas
       </button>
     </nav>
 
@@ -253,6 +259,54 @@
             </form>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section
+      id="seccionEstadisticas"
+      class="oculto"
+      data-seccion="estadisticas"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Estadísticas</h2>
+          <p id="periodoEstadisticas"></p>
+        </div>
+      </div>
+
+      <form id="formPeriodo" class="tarjeta filtros-avanzados">
+        <div class="campo">
+          <label for="estRango">Período</label>
+          <select id="estRango">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="mes">Este mes</option>
+            <option value="anio">Este año</option>
+            <option value="todo">Todo el historial</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="estDesde">Desde</label>
+          <input id="estDesde" type="date">
+        </div>
+
+        <div class="campo">
+          <label for="estHasta">Hasta</label>
+          <input id="estHasta" type="date">
+        </div>
+      </form>
+
+      <div id="avisoGraficos" class="aviso error oculto"></div>
+
+      <div id="indicadoresPeriodo" class="indicadores"></div>
+
+      <div class="graficos">
+        <article class="tarjeta grafico-tarjeta">
+          <h3>Averías por estado</h3>
+          <div id="graficoEstados" class="grafico"></div>
+        </article>
       </div>
     </section>
 
