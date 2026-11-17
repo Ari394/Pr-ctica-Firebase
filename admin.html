@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelpDesk | Administración</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://www.gstatic.com/charts/loader.js" defer></script>
+  <script src="js/storage.js" defer></script>
+  <script src="js/storage-tecnicos.js" defer></script>
+  <script src="js/storage-lecturas-chat.js" defer></script>
+  <script src="js/admin.js" defer></script>
+  <script src="js/chat-admin.js" defer></script>
+  <script src="js/estadisticas.js" defer></script>
+</head>
+<body>
+  <header class="encabezado">
+    <div class="contenedor barra">
+      <div>
+        <h1>HelpDesk</h1>
+        <p>Sistema de reportes de averías</p>
+      </div>
+      <span class="etiqueta">Panel del administrador</span>
+    </div>
+  </header>
+
+  <main class="contenedor">
+    <section class="bienvenida">
+      <h2>Administración general</h2>
+      <p>
+        Gestioná las averías reportadas, asigná técnicos
+        y consultá las estadísticas del servicio.
+      </p>
+    </section>
+
+    <nav class="navegacion" aria-label="Secciones">
+      <button
+        class="activo"
+        type="button"
+        data-seccion="resumen"
+      >
+        Resumen
+      </button>
+
+      <button type="button" data-seccion="averias">
+        Todas las averías
+      </button>
+
+      <button type="button" data-seccion="pendientes">
+        Pendientes
+      </button>
+
+      <button type="button" data-seccion="tecnicos">
+        Técnicos
+      </button>
+
+      <button type="button" data-seccion="chats">
+        Chats
+        <span
+          id="contadorChats"
+          class="contador oculto"
+          aria-label="Mensajes sin leer"
+        ></span>
+      </button>
+
+      <button type="button" data-seccion="estadisticas">
+        Estadísticas
+      </button>
+    </nav>
+
+    <section id="seccionResumen" data-seccion="resumen">
+      <div class="titulo-seccion">
+        <div>
+          <h2>Resumen general</h2>
+          <p>Estado actual de las averías y del equipo técnico.</p>
+        </div>
+      </div>
+
+      <div id="indicadores" class="indicadores"></div>
+    </section>
+
+    <section
+      id="seccionAverias"
+      class="oculto"
+      data-seccion="averias"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Todas las averías</h2>
+          <p id="conteoAverias"></p>
+        </div>
+      </div>
+
+      <form id="formFiltros" class="tarjeta filtros-avanzados">
+        <div class="campo campo-ancho">
+          <label for="buscar">Buscar</label>
+          <input
+            id="buscar"
+            type="search"
+            placeholder="Buscar por título o número"
+          >
+        </div>
+
+        <div class="campo">
+          <label for="filtroEstado">Estado</label>
+          <select id="filtroEstado">
+            <option value="">Todos los estados</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Asignado">Asignado</option>
+            <option value="En proceso">En proceso</option>
+            <option value="Resuelto">Resuelto</option>
+            <option value="Cerrado">Cerrado</option>
+            <option value="Rechazado">Rechazado</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroDepartamento">Departamento</label>
+          <select id="filtroDepartamento">
+            <option value="">Todos los departamentos</option>
+            <option value="TI">Tecnologías de Información</option>
+            <option value="Administración">Administración</option>
+            <option value="Recursos Humanos">Recursos Humanos</option>
+            <option value="Contabilidad">Contabilidad</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroTipo">Clasificación</label>
+          <select id="filtroTipo">
+            <option value="">Hardware y software</option>
+            <option value="Hardware">Hardware</option>
+            <option value="Software">Software</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroTecnico">Técnico</label>
+          <select id="filtroTecnico"></select>
+        </div>
+
+        <div class="campo">
+          <label for="filtroDesde">Desde</label>
+          <input id="filtroDesde" type="date">
+        </div>
+
+        <div class="campo">
+          <label for="filtroHasta">Hasta</label>
+          <input id="filtroHasta" type="date">
+        </div>
+
+        <div class="filtros-acciones campo-ancho">
+          <button
+            id="btnLimpiarFiltros"
+            class="boton secundario"
+            type="button"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </form>
+
+      <div id="listaAverias"></div>
+    </section>
+
+    <section
+      id="seccionPendientes"
+      class="oculto"
+      data-seccion="pendientes"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Averías pendientes</h2>
+          <p id="conteoPendientes"></p>
+        </div>
+      </div>
+
+      <div id="listaPendientes"></div>
+    </section>
+
+    <section
+      id="seccionTecnicos"
+      class="oculto"
+      data-seccion="tecnicos"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Técnicos</h2>
+          <p id="conteoTecnicos"></p>
+        </div>
+      </div>
+
+      <div class="tarjeta filtros">
+        <select id="filtroTecnicos">
+          <option value="">Todos los técnicos</option>
+          <option value="disponibles">Solo disponibles</option>
+          <option value="ocupados">Solo ocupados</option>
+        </select>
+      </div>
+
+      <div id="listaTecnicos"></div>
+    </section>
+
+    <section
+      id="seccionChats"
+      class="oculto"
+      data-seccion="chats"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Chats con técnicos</h2>
+          <p id="conteoChats"></p>
+        </div>
+      </div>
+
+      <div class="tarjeta chat-panel">
+        <div
+          id="listaConversaciones"
+          class="chat-lista"
+          aria-label="Conversaciones"
+        ></div>
+
+        <div class="chat-activo">
+          <p id="chatVacio" class="vacio">
+            Seleccioná una conversación para ver los mensajes.
+          </p>
+
+          <div id="chatContenido" class="chat-contenido oculto">
+            <div class="chat-encabezado">
+              <h3 id="chatTitulo"></h3>
+              <p id="chatSubtitulo"></p>
+            </div>
+
+            <div
+              id="chatMensajes"
+              class="chat-mensajes"
+              aria-live="polite"
+            ></div>
+
+            <p id="chatSoloLectura" class="chat-solo-lectura oculto">
+              La avería no tiene un técnico asignado. Esta
+              conversación solo se puede consultar.
+            </p>
+
+            <form id="formChat" class="chat-formulario">
+              <label for="textoChat" class="oculto">Mensaje</label>
+              <textarea
+                id="textoChat"
+                rows="2"
+                maxlength="1000"
+                placeholder="Escribí un mensaje (Enter para enviar)"
+                required
+              ></textarea>
+
+              <button class="boton principal" type="submit">
+                Enviar
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
+      id="seccionEstadisticas"
+      class="oculto"
+      data-seccion="estadisticas"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Estadísticas</h2>
+          <p id="periodoEstadisticas"></p>
+        </div>
+      </div>
+
+      <form id="formPeriodo" class="tarjeta filtros-avanzados">
+        <div class="campo">
+          <label for="estRango">Período</label>
+          <select id="estRango">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="mes">Este mes</option>
+            <option value="anio">Este año</option>
+            <option value="todo">Todo el historial</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </div>
+
+        <div class="campo">
+          <label for="estDesde">Desde</label>
+          <input id="estDesde" type="date">
+        </div>
+
+        <div class="campo">
+          <label for="estHasta">Hasta</label>
+          <input id="estHasta" type="date">
+        </div>
+      </form>
+
+      <div id="avisoGraficos" class="aviso error oculto"></div>
+
+      <div id="indicadoresPeriodo" class="indicadores"></div>
+
+      <div class="graficos">
+        <article class="tarjeta grafico-tarjeta">
+          <h3>Averías por estado</h3>
+          <div id="graficoEstados" class="grafico"></div>
+        </article>
+
+        <article class="tarjeta grafico-tarjeta">
+          <h3>Hardware y software</h3>
+          <div id="graficoTipos" class="grafico"></div>
+          <div id="tablaTipos" class="tabla-contenedor"></div>
+        </article>
+
+        <article class="tarjeta grafico-tarjeta grafico-ancho">
+          <h3>Averías por departamento</h3>
+          <div id="graficoDepartamentos" class="grafico"></div>
+          <div id="tablaDepartamentos" class="tabla-contenedor"></div>
+        </article>
+
+        <article class="tarjeta grafico-tarjeta grafico-ancho">
+          <h3>Tiempos de atención</h3>
+          <div id="indicadoresTiempos" class="indicadores"></div>
+          <small>
+            Se promedian solo las averías que tienen las fechas
+            necesarias. La duración considera solo las averías
+            resueltas o cerradas.
+          </small>
+        </article>
+
+        <article class="tarjeta grafico-tarjeta grafico-ancho">
+          <h3>Averías por técnico</h3>
+          <div id="graficoTecnicos" class="grafico"></div>
+          <div id="tablaTecnicos" class="tabla-contenedor"></div>
+        </article>
+
+        <article class="tarjeta grafico-tarjeta grafico-ancho">
+          <h3>Tiempos promedio por técnico</h3>
+          <div id="graficoTiempos" class="grafico"></div>
+        </article>
+
+        <article class="tarjeta grafico-tarjeta grafico-ancho">
+          <h3>Averías por tipo de servicio</h3>
+          <div id="graficoServicios" class="grafico"></div>
+          <div id="tablaServicios" class="tabla-contenedor"></div>
+        </article>
+      </div>
+    </section>
+
+    <section
+      id="seccionDetalle"
+      class="tarjeta oculto"
+      data-seccion="detalle"
+    >
+      <button
+        id="btnVolver"
+        class="boton secundario"
+        type="button"
+      >
+        Volver al listado
+      </button>
+
+      <div id="contenidoDetalle"></div>
+
+      <form id="formAsignacion" class="oculto">
+        <h3 id="tituloAsignacion">Asignar técnico</h3>
+
+        <div class="campo">
+          <label for="tecnicoAsignado">Técnico *</label>
+          <select id="tecnicoAsignado" required></select>
+          <small>
+            Los técnicos disponibles con la especialidad
+            de la avería aparecen primero.
+          </small>
+        </div>
+
+        <div class="campo">
+          <label for="tipoServicio">Tipo de servicio *</label>
+          <select id="tipoServicio" required></select>
+        </div>
+
+        <button class="boton principal" type="submit">
+          Asignar técnico
+        </button>
+      </form>
+    </section>
+
+    <div id="mensaje" role="status" aria-live="polite"></div>
+  </main>
+
+  <footer>
+    <p>HelpDesk · Laboratorio 05 · Módulo de administración</p>
+  </footer>
+</body>
+</html>

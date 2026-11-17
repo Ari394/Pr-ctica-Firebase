@@ -75,6 +75,37 @@ const RepositorioAverias = (() => {
     return averias[indice];
   }
 
+  // Uso exclusivo del administrador: no filtra por usuario.
+  function obtenerPorIdComoAdmin(id) {
+    return obtenerTodas().find(
+      averia => averia.id === id
+    ) || null;
+  }
+
+  // Uso exclusivo del administrador: no filtra por usuario.
+  function actualizarComoAdmin(id, cambios) {
+    const averias = obtenerTodas();
+
+    const indice = averias.findIndex(
+      averia => averia.id === id
+    );
+
+    if (indice === -1) {
+      throw new Error("No se encontró la avería.");
+    }
+
+    averias[indice] = {
+      ...averias[indice],
+      ...cambios,
+      id: averias[indice].id,
+      usuarioId: averias[indice].usuarioId
+    };
+
+    guardarTodas(averias);
+
+    return averias[indice];
+  }
+
   const CLAVE_INTERVENCIONES = "helpdesk_intervenciones_v1";
   const CLAVE_EVIDENCIAS = "helpdesk_evidencias_v1";
   const CLAVE_MENSAJES = "helpdesk_mensajes_v1";
@@ -163,6 +194,9 @@ const RepositorioAverias = (() => {
   }
 
   return {
+    obtenerTodas,
+    obtenerPorIdComoAdmin,
+    actualizarComoAdmin,
     crear,
     obtenerPorUsuario,
     obtenerPorId,
