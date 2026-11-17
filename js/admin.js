@@ -9,6 +9,14 @@ const ADMIN_ACTUAL = {
 // Sección desde la que se abrió el detalle, para poder volver.
 let seccionOrigen = "averias";
 
+let averiaSeleccionada = null;
+
+// Estados en los que el técnico está trabajando en la avería.
+const ESTADOS_ACTIVOS = ["Asignado", "En proceso"];
+
+// Estados en los que el administrador puede asignar o reasignar.
+const ESTADOS_ASIGNABLES = ["Pendiente", "Asignado", "Rechazado"];
+
 const $ = id => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", iniciar);
@@ -32,6 +40,16 @@ function iniciar() {
   $("btnVolver").addEventListener("click", () => {
     mostrarSeccion(seccionOrigen);
   });
+
+  $("filtroTecnicos").addEventListener(
+    "change",
+    mostrarTecnicos
+  );
+
+  $("formAsignacion").addEventListener(
+    "submit",
+    asignarTecnico
+  );
 
   mostrarSeccion("resumen");
 }
@@ -70,6 +88,10 @@ function mostrarSeccion(nombre) {
 
   if (nombre === "pendientes") {
     mostrarPendientes();
+  }
+
+  if (nombre === "tecnicos") {
+    mostrarTecnicos();
   }
 }
 
@@ -334,6 +356,8 @@ function verDetalle(id) {
     return;
   }
 
+  averiaSeleccionada = id;
+
   const contenido = $("contenidoDetalle");
   contenido.replaceChildren();
 
@@ -359,6 +383,7 @@ function verDetalle(id) {
   agregarDato(datos, "Fecha del reporte", textoFecha(averia.fechaReporte));
   agregarDato(datos, "Fecha de registro", textoFecha(averia.fechaCreacion));
   agregarDato(datos, "Técnico asignado", averia.tecnicoNombre || "Sin asignar");
+  agregarDato(datos, "Fecha de asignación", textoFecha(averia.fechaAsignacion));
   agregarDato(datos, "Fecha de resolución", textoFecha(averia.fechaResolucion));
 
   contenido.appendChild(datos);
@@ -419,7 +444,269 @@ function verDetalle(id) {
     );
   }
 
+  const asignaciones = averia.historialAsignaciones || [];
+
+  if (asignaciones.length) {
+    contenido.appendChild(
+      crearElemento("h3", "Historial de asignaciones")
+    );
+
+    asignaciones.forEach(asignacion => {
+      const bloque = crearElemento("div", "", "dato");
+
+      bloque.append(
+        crearElemento(
+          "strong",
+          `${textoFecha(asignacion.fecha)} · ${asignacion.asignadoPor}`
+        ),
+        crearElemento(
+          "p",
+          `Asignada a ${asignacion.tecnicoNombre}.`
+        )
+      );
+
+      if (asignacion.motivoRechazo) {
+        bloque.appendChild(
+          crearElemento(
+            "p",
+            `Reasignada tras el rechazo del usuario: ${asignacion.motivoRechazo}`
+          )
+        );
+      }
+
+      contenido.appendChild(bloque);
+    });
+  }
+
+  prepararAsignacion(averia);
+
   mostrarSeccion("detalle");
+}
+
+function tecnicosConCarga() {
+  const averias = RepositorioAverias.obtenerTodas();
+
+  return RepositorioTecnicos.obtenerTodos().map(tecnico => {
+    const activas = averias.filter(
+      averia =>
+        averia.tecnicoId === tecnico.id &&
+        ESTADOS_ACTIVOS.includes(averia.estado)
+    );
+
+    return {
+      ...tecnico,
+      activas,
+      disponible: activas.length === 0
+    };
+  });
+}
+
+function mostrarTecnicos() {
+  const lista = $("listaTecnicos");
+  lista.replaceChildren();
+
+  const filtro = $("filtroTecnicos").value;
+  const todos = tecnicosConCarga();
+
+  const disponibles = todos.filter(
+    tecnico => tecnico.disponible
+  ).length;
+
+  $("conteoTecnicos").textContent =
+    `${disponibles} de ` +
+    textoCantidad(todos.length, "técnico disponible", "técnicos disponibles") +
+    ".";
+
+  const tecnicos = todos
+    .filter(tecnico =>
+      !filtro ||
+      (filtro === "disponibles" && tecnico.disponible) ||
+      (filtro === "ocupados" && !tecnico.disponible)
+    )
+    .sort((a, b) =>
+      a.activas.length - b.activas.length ||
+      a.nombre.localeCompare(b.nombre)
+    );
+
+  if (!tecnicos.length) {
+    mostrarVacio(
+      lista,
+      "No hay técnicos que coincidan con el filtro."
+    );
+    return;
+  }
+
+  tecnicos.forEach(tecnico => {
+    const tarjeta = crearElemento("article", "", "reporte");
+
+    const superior = crearElemento(
+      "div",
+      "",
+      "reporte-superior"
+    );
+
+    const datos = document.createElement("div");
+
+    datos.append(
+      crearElemento("h3", tecnico.nombre),
+      crearElemento(
+        "p",
+        `${tecnico.especialidad} · ${tecnico.correo}`
+      ),
+      crearElemento(
+        "p",
+        `Averías activas: ${tecnico.activas.length}`
+      )
+    );
+
+    tecnico.activas.forEach(averia => {
+      datos.appendChild(
+        crearElemento(
+          "p",
+          `• ${averia.titulo} (${averia.estado})`
+        )
+      );
+    });
+
+    superior.append(
+      datos,
+      crearElemento(
+        "span",
+        tecnico.disponible ? "Disponible" : "Ocupado",
+        tecnico.disponible
+          ? "estado estado-disponible"
+          : "estado estado-ocupado"
+      )
+    );
+
+    tarjeta.appendChild(superior);
+    lista.appendChild(tarjeta);
+  });
+}
+
+function prepararAsignacion(averia) {
+  const formulario = $("formAsignacion");
+  const puedeAsignar = ESTADOS_ASIGNABLES.includes(averia.estado);
+
+  formulario.classList.toggle("oculto", !puedeAsignar);
+
+  if (!puedeAsignar) {
+    return;
+  }
+
+  $("tituloAsignacion").textContent = averia.tecnicoId
+    ? "Reasignar técnico"
+    : "Asignar técnico";
+
+  // Primero los disponibles con la especialidad de la avería,
+  // luego el resto según su carga de trabajo.
+  const tecnicos = tecnicosConCarga()
+    .filter(tecnico => tecnico.id !== averia.tecnicoId)
+    .sort((a, b) =>
+      Number(b.disponible) - Number(a.disponible) ||
+      Number(b.especialidad === averia.tipo) -
+        Number(a.especialidad === averia.tipo) ||
+      a.activas.length - b.activas.length ||
+      a.nombre.localeCompare(b.nombre)
+    );
+
+  const selector = $("tecnicoAsignado");
+  selector.replaceChildren();
+
+  const vacia = crearElemento("option", "Seleccionar");
+  vacia.value = "";
+  selector.appendChild(vacia);
+
+  tecnicos.forEach(tecnico => {
+    const carga = tecnico.disponible
+      ? "Disponible"
+      : textoCantidad(tecnico.activas.length, "avería activa", "averías activas");
+
+    const opcion = crearElemento(
+      "option",
+      `${tecnico.nombre} · ${tecnico.especialidad} · ${carga}`
+    );
+
+    opcion.value = tecnico.id;
+    selector.appendChild(opcion);
+  });
+}
+
+function asignarTecnico(evento) {
+  evento.preventDefault();
+
+  const averia = RepositorioAverias.obtenerPorIdComoAdmin(
+    averiaSeleccionada
+  );
+
+  if (!averia || !ESTADOS_ASIGNABLES.includes(averia.estado)) {
+    mostrarMensaje(
+      "Esta avería ya no se puede asignar.",
+      true
+    );
+    return;
+  }
+
+  const tecnico = RepositorioTecnicos.obtenerPorId(
+    $("tecnicoAsignado").value
+  );
+
+  if (!tecnico) {
+    mostrarMensaje("Seleccioná un técnico.", true);
+    return;
+  }
+
+  const ahora = new Date().toISOString();
+
+  const asignacion = {
+    tecnicoId: tecnico.id,
+    tecnicoNombre: tecnico.nombre,
+    fecha: ahora,
+    asignadoPor: ADMIN_ACTUAL.nombre,
+    motivoRechazo:
+      averia.estado === "Rechazado"
+        ? averia.motivoRechazo
+        : null
+  };
+
+  const cambios = {
+    tecnicoId: tecnico.id,
+    tecnicoNombre: tecnico.nombre,
+    estado: "Asignado",
+    // Se conserva la primera asignación para medir el tiempo de respuesta.
+    fechaAsignacion: averia.fechaAsignacion || ahora,
+    historialAsignaciones: [
+      ...(averia.historialAsignaciones || []),
+      asignacion
+    ]
+  };
+
+  // Tras un rechazo, la avería vuelve a trabajarse y el usuario
+  // debe poder confirmar la nueva solución.
+  if (averia.estado === "Rechazado") {
+    Object.assign(cambios, {
+      fechaResolucion: null,
+      conformidad: null,
+      motivoRechazo: null,
+      fechaConformidad: null
+    });
+  }
+
+  try {
+    RepositorioAverias.actualizarComoAdmin(averia.id, cambios);
+
+    verDetalle(averia.id);
+
+    mostrarMensaje(
+      `Avería asignada a ${tecnico.nombre}.`
+    );
+  } catch (error) {
+    mostrarMensaje(
+      "No se pudo asignar el técnico.",
+      true
+    );
+    console.error(error);
+  }
 }
 
 function contarPorEstado(averias, ...estados) {
@@ -430,7 +717,7 @@ function contarPorEstado(averias, ...estados) {
 
 function mostrarResumen() {
   const averias = RepositorioAverias.obtenerTodas();
-  const tecnicos = RepositorioTecnicos.obtenerTodos();
+  const tecnicos = tecnicosConCarga();
 
   const disponibles = tecnicos.filter(
     tecnico => tecnico.disponible

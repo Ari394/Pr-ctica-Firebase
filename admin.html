@@ -45,6 +45,10 @@
       <button type="button" data-seccion="pendientes">
         Pendientes
       </button>
+
+      <button type="button" data-seccion="tecnicos">
+        Técnicos
+      </button>
     </nav>
 
     <section id="seccionResumen" data-seccion="resumen">
@@ -107,6 +111,29 @@
     </section>
 
     <section
+      id="seccionTecnicos"
+      class="oculto"
+      data-seccion="tecnicos"
+    >
+      <div class="titulo-seccion">
+        <div>
+          <h2>Técnicos</h2>
+          <p id="conteoTecnicos"></p>
+        </div>
+      </div>
+
+      <div class="tarjeta filtros">
+        <select id="filtroTecnicos">
+          <option value="">Todos los técnicos</option>
+          <option value="disponibles">Solo disponibles</option>
+          <option value="ocupados">Solo ocupados</option>
+        </select>
+      </div>
+
+      <div id="listaTecnicos"></div>
+    </section>
+
+    <section
       id="seccionDetalle"
       class="tarjeta oculto"
       data-seccion="detalle"
@@ -120,6 +147,23 @@
       </button>
 
       <div id="contenidoDetalle"></div>
+
+      <form id="formAsignacion" class="oculto">
+        <h3 id="tituloAsignacion">Asignar técnico</h3>
+
+        <div class="campo">
+          <label for="tecnicoAsignado">Técnico *</label>
+          <select id="tecnicoAsignado" required></select>
+          <small>
+            Los técnicos disponibles con la especialidad
+            de la avería aparecen primero.
+          </small>
+        </div>
+
+        <button class="boton principal" type="submit">
+          Asignar técnico
+        </button>
+      </form>
     </section>
 
     <div id="mensaje" role="status" aria-live="polite"></div>

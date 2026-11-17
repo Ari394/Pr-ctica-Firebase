@@ -7,34 +7,32 @@ const RepositorioTecnicos = (() => {
   const CLAVE = "helpdesk_tecnicos_v1";
 
   // Datos iniciales mientras no exista el módulo de técnicos.
+  // La disponibilidad no se guarda: se calcula según las
+  // averías activas asignadas a cada técnico.
   const TECNICOS_INICIALES = [
     {
       id: "tecnico-001",
       nombre: "Carlos Méndez",
       correo: "carlos.mendez@helpdesk.local",
-      especialidad: "Hardware",
-      disponible: true
+      especialidad: "Hardware"
     },
     {
       id: "tecnico-002",
       nombre: "María Rodríguez",
       correo: "maria.rodriguez@helpdesk.local",
-      especialidad: "Software",
-      disponible: true
+      especialidad: "Software"
     },
     {
       id: "tecnico-003",
       nombre: "José Hernández",
       correo: "jose.hernandez@helpdesk.local",
-      especialidad: "Hardware",
-      disponible: true
+      especialidad: "Hardware"
     },
     {
       id: "tecnico-004",
       nombre: "Ana Castillo",
       correo: "ana.castillo@helpdesk.local",
-      especialidad: "Software",
-      disponible: true
+      especialidad: "Software"
     }
   ];
 
@@ -60,12 +58,6 @@ const RepositorioTecnicos = (() => {
     localStorage.setItem(
       CLAVE,
       JSON.stringify(tecnicos)
-    );
-  }
-
-  function obtenerDisponibles() {
-    return obtenerTodos().filter(
-      tecnico => tecnico.disponible
     );
   }
 
@@ -99,7 +91,6 @@ const RepositorioTecnicos = (() => {
 
   return {
     obtenerTodos,
-    obtenerDisponibles,
     obtenerPorId,
     actualizar
   };
